@@ -41,9 +41,9 @@ def pull_data():
     if response.status_code == 200:
         data = response.json()
         
-        # Add play_id to each play
-        for item in data:
-            item["play_id"] = str(uuid.uuid4())  # Add a unique play_id to each play
+        # Add play_id as a unique identifier for each row
+        for index, item in enumerate(data):
+            item["play_id"] = str(index + 1)  # Assign a unique sequential play_id (1-based index)
         
         json_data = json.dumps(data)
         rd.set("hgnc_data", json_data)  # Store using a string key
