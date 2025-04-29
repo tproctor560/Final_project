@@ -30,7 +30,7 @@ CSV_FILE_PATH = os.path.join(os.path.dirname(__file__), 'data', 'pbp-2024.csv')
 
 
 
-@app.route('/data', methods=['POST'])
+@app.route('/plays', methods=['POST', 'GET', 'DELETE'])
 def pull_data():
     """
     Loads NFL play-by-play data from a CSV file and stores it in Redis.
@@ -38,83 +38,76 @@ def pull_data():
     Returns: jsonify: JSON response describing the outcome of the function.
     """
     logging.debug("Request to load NFL play-by-play data received.")
+    
+    if request.method == 'POST':
+        try:
+            # Load CSV data into a pandas DataFrame
+            df = pd.read_csv(CSV_FILE_PATH)
 
-    try:
-        # Load CSV data into a pandas DataFrame
-        df = pd.read_csv(CSV_FILE_PATH)
+            # Print out the column names for debugging purposes
+            logging.debug(f"CSV Columns: {df.columns.tolist()}")
 
-        # Print out the column names for debugging purposes
-        logging.debug(f"CSV Columns: {df.columns.tolist()}")
+            # Check if the CSV contains the necessary columns
+            required_columns = ['Formation', 'PlayType', 'Description', 'RushDirection', 'PassType']
+            if not all(col in df.columns for col in required_columns):
+                logging.error(f"CSV file is missing required columns. Found columns: {df.columns}")
+                return jsonify({"error": "CSV file is missing required columns"}), 400
 
-        # Check if the CSV contains the necessary columns
-        required_columns = ['Formation', 'PlayType', 'Description', 'RushDirection', 'PassType']
-        if not all(col in df.columns for col in required_columns):
-            logging.error(f"CSV file is missing required columns. Found columns: {df.columns}")
-            return jsonify({"error": "CSV file is missing required columns"}), 400
+            # Handle missing or invalid data
+            df['Formation'] = df['Formation'].fillna('Unknown')  # Fill missing formation with 'Unknown'
+            df['PlayType'] = df['PlayType'].fillna('Unknown')  # Fill missing play type with 'Unknown'
+            df['Description'] = df['Description'].fillna('No description')  # Fill missing description
+            df['RushDirection'] = df['RushDirection'].fillna('Unknown')  # Fill missing rush direction
+            df['PassType'] = df['PassType'].fillna('Unknown')  # Fill missing pass type
 
-        # Handle missing or invalid data
-        df['Formation'] = df['Formation'].fillna('Unknown')  # Fill missing formation with 'Unknown'
-        df['PlayType'] = df['PlayType'].fillna('Unknown')  # Fill missing play type with 'Unknown'
-        df['Description'] = df['Description'].fillna('No description')  # Fill missing description
-        df['RushDirection'] = df['RushDirection'].fillna('Unknown')  # Fill missing rush direction
-        df['PassType'] = df['PassType'].fillna('Unknown')  # Fill missing pass type
+            # Add play_id as a unique identifier for each row
+            df['play_id'] = range(1, len(df) + 1)  # Sequential play_id (1-based index)
 
-        # Add play_id as a unique identifier for each row
-        df['play_id'] = range(1, len(df) + 1)  # Sequential play_id (1-based index)
+            # Convert the DataFrame to a list of dictionaries
+            data = df[['play_id', 'Formation', 'PlayType', 'Description', 'RushDirection', 'PassType']].to_dict(orient='records')
 
-        # Convert the DataFrame to a list of dictionaries
-        data = df[['play_id', 'Formation', 'PlayType', 'Description', 'RushDirection', 'PassType']].to_dict(orient='records')
+            # Store the data in Redis
+            rd.set("hgnc_data", json.dumps(data))  # Store using a string key
 
-        # Store the data in Redis
-        rd.set("hgnc_data", json.dumps(data))  # Store using a string key
+            logging.info("NFL play-by-play data successfully fetched and stored in Redis.")
+            return jsonify({"message": "NFL play-by-play data loaded successfully"}), 201
 
-        logging.info("NFL play-by-play data successfully fetched and stored in Redis.")
-        return jsonify({"message": "NFL play-by-play data loaded successfully"}), 201
+        except Exception as e:
+            logging.error(f"Error loading data from CSV: {str(e)}")
+            return jsonify({"error": f"Error loading data from CSV: {str(e)}"}), 500
+    
+    elif request.method == 'GET':
+        try:
+            logging.debug("Request to retrieve NFL play-by-play data received.")
+            cached_data = rd.get("hgnc_data")
+            if cached_data:
+                logging.info("Data retrieved from Redis cache.")
+                return jsonify(json.loads(cached_data))
+            return jsonify({"error": "No NFL play-by-play data available"}), 500
+        except Exception as e:
+            logging.error(f"Error loading data from CSV: {str(e)}")
+            return jsonify({"error": f"Error loading data from CSV: {str(e)}"}), 500
 
-    except Exception as e:
-        logging.error(f"Error loading data from CSV: {str(e)}")
-        return jsonify({"error": f"Error loading data from CSV: {str(e)}"}), 500
-
-
-
-@app.route('/data', methods=['GET'])
-def return_data():
-    """
-    Returns the cached NFL play-by-play data from Redis.
-    Args: None
-    Returns: The cached data or an error message.
-    """
-    logging.debug("Request to retrieve NFL play-by-play data received.")
-    cached_data = rd.get("hgnc_data")
-    if cached_data:
-        logging.info("Data retrieved from Redis cache.")
-        return jsonify(json.loads(cached_data))
-    return jsonify({"error": "No NFL play-by-play data available"}), 500
-
-
-@app.route('/data', methods=['DELETE'])
-def delete():
-    """
-    Deletes the cached NFL play-by-play data from Redis.
-    Args: None
-    Returns: A message regarding the outcome of the function.
-    """
-    logging.debug("Request to delete NFL play-by-play data received.")
-    deleted_data = rd.delete("hgnc_data")
-    if deleted_data > 0:
-        logging.info("NFL play-by-play data deleted from Redis cache.")
-        return "", 204  # No Content (successful delete)
-    logging.warning("No NFL play-by-play data found to delete.")
-    return jsonify({"error": "No NFL play-by-play data found in Redis."}), 404  # Data not found
+    elif request.method == 'DELETE':
+        try:
+            logging.debug("Request to delete NFL play-by-play data received.")
+            deleted_data = rd.delete("hgnc_data")
+            if deleted_data > 0:
+                logging.info("NFL play-by-play data deleted from Redis cache.")
+                return "", 204  # No Content (successful delete)
+            logging.warning("No NFL play-by-play data found to delete.")
+            return jsonify({"error": "No NFL play-by-play data found in Redis."}), 404  # Data not found
+        except Exception as e:
+            logging.error(f"Error loading data from CSV: {str(e)}")
+            return jsonify({"error": f"Error loading data from CSV: {str(e)}"}), 500
 
 
-@app.route('/play_structure', methods=['GET'])
+@app.route('/plays/play_structure', methods=['GET'])
 def get_all_genes():
     """
     Retrieves the formation, playtype, and description for each play, 
     additionally it returns the rush direction if the playtype=rush 
     and the pass type if the playtype=pass.
-    
     Returns: A JSON response with all play data.
     """
     logging.debug("Request to retrieve all play structure data received.")
@@ -127,15 +120,15 @@ def get_all_genes():
         for item in data:
             play_info = {
                 "play_id": item.get("play_id"),  # Use the play_id from the data
-                "formation": item.get("formation"),
-                "play_type": item.get("play_type"),
-                "description": item.get("description"),
+                "formation": item.get("Formation"),
+                "play_type": item.get("PlayType"),
+                "description": item.get("Description"),
             }
 
             if item.get("play_type") == "rush":
-                play_info["rush_direction"] = item.get("rush_direction")
+                play_info["rush_direction"] = item.get("RushDirection")
             elif item.get("play_type") == "pass":
-                play_info["pass_type"] = item.get("pass_type")
+                play_info["pass_type"] = item.get("PassType")
 
             play_data.append(play_info)
 
@@ -144,13 +137,11 @@ def get_all_genes():
     return jsonify({"error": "No play structure data available"}), 500
 
 
-@app.route('/playstructure/<play_id>', methods=['GET'])
+@app.route('/plays/<play_id>', methods=['GET'])
 def gene_pull(play_id: str):
     """
     Retrieves a specific play structure based off the unique play_id.
-    
     Args: play_id (str): The unique identifier of the play.
-    
     Returns: A JSON response containing the play details or an error message if not found.
     """
     logging.debug(f"Request to retrieve play structure for play_id: {play_id} received.")
@@ -165,6 +156,56 @@ def gene_pull(play_id: str):
                 return jsonify(item), 200
 
     return jsonify({"error": f"Play with id {play_id} not found"}), 404
+
+
+@app.route('/plays/pass', methods=['GET'])
+def pass_pull():
+    """
+    Retrieves a specific play structure based off the unique play_id.
+    Args: play_id (str): The unique identifier of the play.
+    Returns: A JSON response containing the play details or an error message if not found.
+    """
+    try:
+        logging.debug(f"Request to retrieve play structure for passes received.")
+        cached_data = rd.get("hgnc_data")
+        if cached_data:
+            logging.info("Data retrieved from Redis cache.")
+            data = json.loads(cached_data)
+            
+            pass_list = []
+            
+            # Search for the play with the provided play_id
+            for item in data:
+                if item.get("PlayType") == "PASS":
+                    pass_list.append(item)
+            return jsonify(pass_list), 200
+    except Exception as e:
+        return jsonify({"error": f"Error: {e}"}), 404
+    
+
+@app.route('/plays/rush', methods=['GET'])
+def rush_pull():
+    """
+    Retrieves a specific play structure based off the unique play_id.
+    Args: play_id (str): The unique identifier of the play.
+    Returns: A JSON response containing the play details or an error message if not found.
+    """
+    try:
+        logging.debug(f"Request to retrieve play structure for rush received.")
+        cached_data = rd.get("hgnc_data")
+        if cached_data:
+            logging.info("Data retrieved from Redis cache.")
+            data = json.loads(cached_data)
+            
+            rush_list = []
+            
+            # Search for the play with the provided play_id
+            for item in data:
+                if item.get("PlayType") == "RUSH":
+                    rush_list.append(item)
+            return jsonify(rush_list), 200
+    except Exception as e:
+        return jsonify({"error": f"Error: {e}"}), 404
 
 
 @app.route('/jobs', methods=['POST'])
