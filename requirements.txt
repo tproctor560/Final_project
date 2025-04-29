@@ -1,0 +1,7 @@
+Flask
+requests
+redis
+hotqueue
+logging
+pytest
+
