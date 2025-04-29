@@ -26,7 +26,8 @@ def get_redis_client() -> redis.Redis:
     return redis.Redis(host="redis-db", port=6379, decode_responses=True)
 
 rd = get_redis_client()
-CSV_FILE_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'pbp-2024.csv')
+CSV_FILE_PATH = os.path.join(os.path.dirname(__file__), 'data', 'pbp-2024.csv')
+
 
 
 @app.route('/data', methods=['POST'])
