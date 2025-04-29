@@ -43,12 +43,22 @@ def pull_data():
         # Load CSV data into a pandas DataFrame
         df = pd.read_csv(CSV_FILE_PATH)
 
+        # Print out the column names for debugging purposes
+        logging.debug(f"CSV Columns: {df.columns.tolist()}")
+
         # Check if the CSV contains the necessary columns
         required_columns = ['Formation', 'PlayType', 'Description', 'RushDirection', 'PassType']
         if not all(col in df.columns for col in required_columns):
             logging.error(f"CSV file is missing required columns. Found columns: {df.columns}")
             return jsonify({"error": "CSV file is missing required columns"}), 400
-        
+
+        # Handle missing or invalid data
+        df['Formation'] = df['Formation'].fillna('Unknown')  # Fill missing formation with 'Unknown'
+        df['PlayType'] = df['PlayType'].fillna('Unknown')  # Fill missing play type with 'Unknown'
+        df['Description'] = df['Description'].fillna('No description')  # Fill missing description
+        df['RushDirection'] = df['RushDirection'].fillna('Unknown')  # Fill missing rush direction
+        df['PassType'] = df['PassType'].fillna('Unknown')  # Fill missing pass type
+
         # Add play_id as a unique identifier for each row
         df['play_id'] = range(1, len(df) + 1)  # Sequential play_id (1-based index)
 
