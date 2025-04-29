@@ -43,7 +43,7 @@ def pull_data():
         df = pd.read_csv(CSV_FILE_PATH)
 
         # Check if the CSV contains the necessary columns
-        required_columns = ['formation', 'play_type', 'description', 'rush_direction', 'pass_type']
+        required_columns = ['Formation', 'PlayType', 'Description', 'RushDirection', 'PassType']
         if not all(col in df.columns for col in required_columns):
             logging.error(f"CSV file is missing required columns. Found columns: {df.columns}")
             return jsonify({"error": "CSV file is missing required columns"}), 400
@@ -52,7 +52,7 @@ def pull_data():
         df['play_id'] = range(1, len(df) + 1)  # Sequential play_id (1-based index)
 
         # Convert the DataFrame to a list of dictionaries
-        data = df.to_dict(orient='records')
+        data = df[['play_id', 'Formation', 'PlayType', 'Description', 'RushDirection', 'PassType']].to_dict(orient='records')
 
         # Store the data in Redis
         rd.set("hgnc_data", json.dumps(data))  # Store using a string key
@@ -63,6 +63,7 @@ def pull_data():
     except Exception as e:
         logging.error(f"Error loading data from CSV: {str(e)}")
         return jsonify({"error": f"Error loading data from CSV: {str(e)}"}), 500
+
 
 
 @app.route('/data', methods=['GET'])
