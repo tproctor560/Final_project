@@ -66,7 +66,7 @@ def pull_data():
         data = df[['play_id', 'Formation', 'PlayType', 'Description', 'RushDirection', 'PassType']].to_dict(orient='records')
 
         # Store the data in Redis
-        rd.set("hgnc_data", json.dumps(data))  # Store using a string key
+        rd.set("nfl_data", json.dumps(data))  # Store using a string key
 
         logging.info("NFL play-by-play data successfully fetched and stored in Redis.")
         return jsonify({"message": "NFL play-by-play data loaded successfully"}), 201
@@ -85,7 +85,7 @@ def return_data():
     Returns: The cached data or an error message.
     """
     logging.debug("Request to retrieve NFL play-by-play data received.")
-    cached_data = rd.get("hgnc_data")
+    cached_data = rd.get("nfl_data")
     if cached_data:
         logging.info("Data retrieved from Redis cache.")
         return jsonify(json.loads(cached_data))
@@ -100,7 +100,7 @@ def delete():
     Returns: A message regarding the outcome of the function.
     """
     logging.debug("Request to delete NFL play-by-play data received.")
-    deleted_data = rd.delete("hgnc_data")
+    deleted_data = rd.delete("nfl_data")
     if deleted_data > 0:
         logging.info("NFL play-by-play data deleted from Redis cache.")
         return "", 204  # No Content (successful delete)
@@ -118,7 +118,7 @@ def get_all_genes():
     Returns: A JSON response with all play data.
     """
     logging.debug("Request to retrieve all play structure data received.")
-    cached_data = rd.get("hgnc_data")
+    cached_data = rd.get("nfl_data")
     if cached_data:
         logging.info("Data retrieved from Redis cache.")
         data = json.loads(cached_data)
@@ -154,7 +154,7 @@ def gene_pull(play_id: str):
     Returns: A JSON response containing the play details or an error message if not found.
     """
     logging.debug(f"Request to retrieve play structure for play_id: {play_id} received.")
-    cached_data = rd.get("hgnc_data")
+    cached_data = rd.get("nfl_data")
     if cached_data:
         logging.info("Data retrieved from Redis cache.")
         data = json.loads(cached_data)
@@ -282,7 +282,7 @@ def get_locus_types(jobid: str):
                 "status": status
             }), 202
 
-        raw_data = json.loads(r.get("hgnc_data") or "{}")
+        raw_data = json.loads(r.get("nfl_data") or "{}")
         nfl_data = raw_data.get("response", {}).get("docs", [])
 
         # Filter plays that contain the word "injured" in the description
