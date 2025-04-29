@@ -2,6 +2,7 @@ import requests
 import uuid
 import math
 import logging
+import pandas as pd
 from flask import Flask, request, jsonify
 import json
 import os
@@ -25,34 +26,43 @@ def get_redis_client() -> redis.Redis:
     return redis.Redis(host="redis-db", port=6379, decode_responses=True)
 
 rd = get_redis_client()
-HGNC_URL = "https://storage.googleapis.com/public-download-files/hgnc/json/json/hgnc_complete_set.json"
+CSV_FILE_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'pbp-2024.csv')
 
 
 @app.route('/data', methods=['POST'])
 def pull_data():
     """
-    Pulls NFL data from the external API and stores it in Redis.
+    Loads NFL play-by-play data from a CSV file and stores it in Redis.
     Args: none
     Returns: jsonify: JSON response describing the outcome of the function.
     """
     logging.debug("Request to load NFL play-by-play data received.")
-    response = requests.get(HGNC_URL)
-    
-    if response.status_code == 200:
-        data = response.json()
+
+    try:
+        # Load CSV data into a pandas DataFrame
+        df = pd.read_csv(CSV_FILE_PATH)
+
+        # Check if the CSV contains the necessary columns
+        required_columns = ['formation', 'play_type', 'description', 'rush_direction', 'pass_type']
+        if not all(col in df.columns for col in required_columns):
+            logging.error(f"CSV file is missing required columns. Found columns: {df.columns}")
+            return jsonify({"error": "CSV file is missing required columns"}), 400
         
         # Add play_id as a unique identifier for each row
-        for index, item in enumerate(data):
-            item["play_id"] = str(index + 1)  # Assign a unique sequential play_id (1-based index)
-        
-        json_data = json.dumps(data)
-        rd.set("hgnc_data", json_data)  # Store using a string key
-        
+        df['play_id'] = range(1, len(df) + 1)  # Sequential play_id (1-based index)
+
+        # Convert the DataFrame to a list of dictionaries
+        data = df.to_dict(orient='records')
+
+        # Store the data in Redis
+        rd.set("hgnc_data", json.dumps(data))  # Store using a string key
+
         logging.info("NFL play-by-play data successfully fetched and stored in Redis.")
         return jsonify({"message": "NFL play-by-play data loaded successfully"}), 201
-    else:
-        logging.error(f"Failed to fetch NFL play-by-play data. Status code: {response.status_code}")
-        return jsonify({"error": "Failed to fetch NFL play-by-play data"}), response.status_code
+
+    except Exception as e:
+        logging.error(f"Error loading data from CSV: {str(e)}")
+        return jsonify({"error": f"Error loading data from CSV: {str(e)}"}), 500
 
 
 @app.route('/data', methods=['GET'])
