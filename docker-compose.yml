@@ -7,10 +7,9 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - ./data:/data
+      - ./data:/code/data  # Correct volume mapping
     user: "1000:1000"
     command: ["--save", ""]
-
     restart: always
 
   flask-app:
@@ -29,15 +28,14 @@ services:
     volumes:
       - ./src:/code/src
       - ./test:/code/test
+      - ./data:/code/data  # Make sure the Flask app can access the data folder too
     restart: always
   
   worker:
     build: .
     depends_on:
       - redis-db
-    command: python worker.py
+    container_name: worker
+    volumes:
+      - ./src:/code/src
     restart: always
-    environment:
-      - REDIS_HOST=redis-db
-      - REDIS_PORT=6379
-      - LOG_LEVEL=DEBUG
