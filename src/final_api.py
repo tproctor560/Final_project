@@ -6,7 +6,7 @@ import pandas as pd
 from flask import Flask, request, jsonify
 import json
 import os
-import redis 
+import redis
 from datetime import datetime
 from jobs import add_job
 from jobs import get_job_by_id
@@ -271,22 +271,22 @@ def get_locus_types(jobid: str):
             }), 202
 
         raw_data = json.loads(r.get("hgnc_data") or "{}")
-        gene_list = raw_data.get("response", {}).get("docs", [])
+        nfl_data = raw_data.get("response", {}).get("docs", [])
 
-        # Filter genes that contain the word "injured" in the description
-        filtered_genes = [gene for gene in gene_list if "injured" in gene.get("description", "").lower()]
+        # Filter plays that contain the word "injured" in the description
+        filtered_plays = [play for play in nfl_data if "injured" in play.get("description", "").lower()]
         
         # Count occurrences by formation type and rush direction
         injury_counts = {}
-        for gene in filtered_genes:
-            formation = gene.get("formation", "Unknown")
-            rush_direction = gene.get("rush_direction", "Unknown")
+        for play in filtered_plays:
+            formation = play.get("formation", "Unknown")
+            rush_direction = play.get("rush_direction", "Unknown")
             combo = f"{formation} - {rush_direction}"
             
             injury_counts[combo] = injury_counts.get(combo, 0) + 1
         
         # Calculate the injury rate percentage for each combo
-        total_combos = len(filtered_genes)
+        total_combos = len(filtered_plays)
         injury_percentage = {
             combo: (count / total_combos) * 100 if total_combos else 0
             for combo, count in injury_counts.items()
@@ -295,7 +295,7 @@ def get_locus_types(jobid: str):
         output = {
             "job_id": jobid,
             "injury_percentage": injury_percentage,
-            "total_genes_counted": total_combos
+            "total_plays_counted": total_combos
         }
 
         results_db.set(jobid, json.dumps(output))  # Cache in results DB
