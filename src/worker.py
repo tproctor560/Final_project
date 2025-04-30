@@ -92,6 +92,7 @@ def run_worker_job_logic(job_id: str) -> None:
 
 
 def find_injuries_from_list(list_of_plays):
+    # TODO: Write a descriptor, mention that the list was made using claude 3.7 (Prompt: Can you write a list of injuries that can identify if a play ended in injury based on the following file head:)
     try:
         df_list_of_plays = pd.DataFrame(list_of_plays)
         INJURY_LIST = [
