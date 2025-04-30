@@ -54,12 +54,14 @@ def load_data_from_csv():
         df['Description'] = df['Description'].fillna('No description')  # Fill missing description
         df['RushDirection'] = df['RushDirection'].fillna('Unknown')  # Fill missing rush direction
         df['PassType'] = df['PassType'].fillna('Unknown')  # Fill missing pass type
+        if not pd.api.types.is_datetime64_any_dtype(df['GameDate']):
+            df['GameDate'] = pd.to_datetime(df['GameDate'])
 
         # Add play_id as a unique identifier for each row
         df['play_id'] = range(1, len(df) + 1)  # Sequential play_id (1-based index)
 
         # Convert the DataFrame to a list of dictionaries
-        data = df[['play_id', 'Formation', 'PlayType', 'Description', 'RushDirection', 'PassType']].to_dict(orient='records')
+        data = df[['play_id', 'GameId' 'GameDate','Formation', 'PlayType', 'Description', 'RushDirection', 'PassType']].to_dict(orient='records')
 
         # Store the data in Redis
         rd.set("hgnc_data", json.dumps(data))  # Store using a string key
@@ -230,22 +232,35 @@ def create_job():
     logging.debug("Job creation request received.")
     try:
         data = request.get_json()
+        cached_data = rd.get("hgnc_data")
+        oldest_date = cached_data['GameDate'].min()  
+        newest_date = cached_data['GameDate'].max()
 
         # Validate the date range data
-        if not data or "start_date" not in data or "end_date" not in data or "method" not in data:
+        if not data or "start_date" not in data or "end_date" not in data:
             logging.warning("Job creation failed: missing dates.")
+            logging.info("Setting the dates to the maximum and minimum of this dataset")
+            data["start_date"] = oldest_date
+            data["end_date"] = newest_date
+            
+        if "method" not in data:
+            logging.warning("Job creation failed: missing method")
             return jsonify({
-                "error": "You must provide a method or a 'start_date' and 'end_date' in YYYY-MM-DD format."
+                "error": "You must provide a method either plays/, or injuries/, refer to the documentation for more help"
             }), 400
 
         # Validate the date format
         try:
             datetime.strptime(data["start_date"], "%Y-%m-%d")
             datetime.strptime(data["end_date"], "%Y-%m-%d")
-        except ValueError:
-            logging.warning("Job creation failed: invalid date format.")
+            
+            if data["start_date"] < oldest_date or data["end_date"] > newest_date:
+                logging.warning("Dates are not in the bounds")
+                raise Exception("Dates are not in the bounds")
+        except Exception as e:
+            logging.warning(f"Job creation failed: invalid date format. Check {e}")
             return jsonify({
-                "error": "Dates must be in YYYY-MM-DD format."
+                "error": "Dates must be in YYYY-MM-DD format. and must be in the bounds"
             }), 400
             
         if not data["method"].startswith("plays/") or not data["method"].startswith("injury/"):
