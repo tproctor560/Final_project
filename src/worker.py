@@ -2,10 +2,13 @@ import time
 import json
 import redis
 import os
-import logging 
+import logging
+import re
+import pandas as pd
 from hotqueue import HotQueue
 from datetime import datetime
 from jobs import get_job_by_id, update_job_status
+from api import load_data_from_csv
 
 log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=logging.DEBUG)
@@ -50,6 +53,8 @@ def run_worker_job_logic(job_id: str) -> None:
 
         # Load HGNC data
         raw_data = json.loads(rd.get("hgnc_data") or "{}")
+        
+        # TODO: Convert Raw_data to df when loading or upload df when loading
         gene_list = raw_data.get("response", {}).get("docs", [])
         logging.info(f"Filtering genes for job {job_id} between {start_date_str} and {end_date_str}.")
         filtered_genes = []
@@ -86,13 +91,60 @@ def run_worker_job_logic(job_id: str) -> None:
         update_job_status(job_id, "failed")
 
 
+def find_injuries_from_list(list_of_plays):
+    try:
+        df_list_of_plays = pd.DataFrame(list_of_plays)
+        INJURY_LIST = [
+                r'injur(y|ed|ies)',
+                r'carted off',
+                r'helped off',
+                r'assisted off',
+                r'left the (game|field)',
+                r'medical attention',
+                r'trainers',
+                r'concussion',
+                r'protocol',
+                r'did not return',
+                r'evaluated for',
+                r'medical tent',
+                r'questionable to return',
+                r'doubtful to return',
+                r'out for the game',
+                r'is down',
+                r'stays down',
+                r'remained down'
+            ]
+        
+        injury_pattern = "|".join(INJURY_LIST)
+        
+        df_list_of_plays['Contains_Injury'] = df_list_of_plays['Description'].str.contains(
+            injury_pattern,
+            case=False,
+            regex=True
+            na=False
+        )
+        
+        injury_plays = df_list_of_plays[df_list_of_plays['Contains_Injury']]
+        non_injury_plays = df_list_of_plays[df_list_of_plays['Contains_Injury'] == False]
+        
+        return injury_plays, non_injury_plays
+        
+    except Exception as e:
+        logging.warning("Error while processing data for injuries")
+        return False, False
+    
+
 @q.worker
 def do_work(job_id):
     """
     HotQueue entrypoint for processing jobs.
     """
+    
+    
+    
     run_worker_job_logic(job_id)
 
 
 if __name__ == "__main__":
+    load_data_from_csv()
     do_work()

@@ -28,9 +28,52 @@ def get_redis_client() -> redis.Redis:
 rd = get_redis_client()
 CSV_FILE_PATH = os.path.join(os.path.dirname(__file__), 'data', 'pbp-2024.csv')
 
+def load_data_from_csv():
+    """
+    Loads NFL play-by-play data from a CSV file and stores it in Redis.
+    Args: none
+    Returns: jsonify: JSON response describing the outcome of the function.
+    """
+    logging.debug("Loading NFL play-by-play data received.")
+    try:
+            # Load CSV data into a pandas DataFrame
+        df = pd.read_csv(CSV_FILE_PATH)
+
+        # Print out the column names for debugging purposes
+        logging.debug(f"CSV Columns: {df.columns.tolist()}")
+
+        # Check if the CSV contains the necessary columns
+        required_columns = ['Formation', 'PlayType', 'Description', 'RushDirection', 'PassType']
+        if not all(col in df.columns for col in required_columns):
+            logging.error(f"CSV file is missing required columns. Found columns: {df.columns}")
+            return jsonify({"error": "CSV file is missing required columns"}), 400
+
+        # Handle missing or invalid data
+        df['Formation'] = df['Formation'].fillna('Unknown')  # Fill missing formation with 'Unknown'
+        df['PlayType'] = df['PlayType'].fillna('Unknown')  # Fill missing play type with 'Unknown'
+        df['Description'] = df['Description'].fillna('No description')  # Fill missing description
+        df['RushDirection'] = df['RushDirection'].fillna('Unknown')  # Fill missing rush direction
+        df['PassType'] = df['PassType'].fillna('Unknown')  # Fill missing pass type
+
+        # Add play_id as a unique identifier for each row
+        df['play_id'] = range(1, len(df) + 1)  # Sequential play_id (1-based index)
+
+        # Convert the DataFrame to a list of dictionaries
+        data = df[['play_id', 'Formation', 'PlayType', 'Description', 'RushDirection', 'PassType']].to_dict(orient='records')
+
+        # Store the data in Redis
+        rd.set("hgnc_data", json.dumps(data))  # Store using a string key
+
+        logging.info("NFL play-by-play data successfully fetched and stored in Redis.")
+        return jsonify({"message": "NFL play-by-play data loaded successfully"}), 201
+
+    except Exception as e:
+        logging.error(f"Error loading data from CSV: {str(e)}")
+        return jsonify({"error": f"Error loading data from CSV: {str(e)}"}), 500
 
 
-@app.route('/plays', methods=['POST', 'GET', 'DELETE'])
+
+@app.route('/plays', methods=['GET', 'DELETE'])
 def pull_data():
     """
     Loads NFL play-by-play data from a CSV file and stores it in Redis.
@@ -39,44 +82,7 @@ def pull_data():
     """
     logging.debug("Request to load NFL play-by-play data received.")
     
-    if request.method == 'POST':
-        try:
-            # Load CSV data into a pandas DataFrame
-            df = pd.read_csv(CSV_FILE_PATH)
-
-            # Print out the column names for debugging purposes
-            logging.debug(f"CSV Columns: {df.columns.tolist()}")
-
-            # Check if the CSV contains the necessary columns
-            required_columns = ['Formation', 'PlayType', 'Description', 'RushDirection', 'PassType']
-            if not all(col in df.columns for col in required_columns):
-                logging.error(f"CSV file is missing required columns. Found columns: {df.columns}")
-                return jsonify({"error": "CSV file is missing required columns"}), 400
-
-            # Handle missing or invalid data
-            df['Formation'] = df['Formation'].fillna('Unknown')  # Fill missing formation with 'Unknown'
-            df['PlayType'] = df['PlayType'].fillna('Unknown')  # Fill missing play type with 'Unknown'
-            df['Description'] = df['Description'].fillna('No description')  # Fill missing description
-            df['RushDirection'] = df['RushDirection'].fillna('Unknown')  # Fill missing rush direction
-            df['PassType'] = df['PassType'].fillna('Unknown')  # Fill missing pass type
-
-            # Add play_id as a unique identifier for each row
-            df['play_id'] = range(1, len(df) + 1)  # Sequential play_id (1-based index)
-
-            # Convert the DataFrame to a list of dictionaries
-            data = df[['play_id', 'Formation', 'PlayType', 'Description', 'RushDirection', 'PassType']].to_dict(orient='records')
-
-            # Store the data in Redis
-            rd.set("hgnc_data", json.dumps(data))  # Store using a string key
-
-            logging.info("NFL play-by-play data successfully fetched and stored in Redis.")
-            return jsonify({"message": "NFL play-by-play data loaded successfully"}), 201
-
-        except Exception as e:
-            logging.error(f"Error loading data from CSV: {str(e)}")
-            return jsonify({"error": f"Error loading data from CSV: {str(e)}"}), 500
-    
-    elif request.method == 'GET':
+    if request.method == 'GET':
         try:
             logging.debug("Request to retrieve NFL play-by-play data received.")
             cached_data = rd.get("hgnc_data")
@@ -226,10 +232,10 @@ def create_job():
         data = request.get_json()
 
         # Validate the date range data
-        if not data or "start_date" not in data or "end_date" not in data:
+        if not data or "start_date" not in data or "end_date" not in data or "method" not in data:
             logging.warning("Job creation failed: missing dates.")
             return jsonify({
-                "error": "You must provide both 'start_date' and 'end_date' in YYYY-MM-DD format."
+                "error": "You must provide a method or a 'start_date' and 'end_date' in YYYY-MM-DD format."
             }), 400
 
         # Validate the date format
@@ -241,10 +247,16 @@ def create_job():
             return jsonify({
                 "error": "Dates must be in YYYY-MM-DD format."
             }), 400
+            
+        if not data["method"].startswith("plays/") or not data["method"].startswith("injury/"):
+            logging.warning("Job creation failed: invalid method.")
+            return jsonify({
+                "error": "Methods should start with plays/ or injury/, and then specific play ids after"
+            }), 400
         
-        job = add_job(data["start_date"], data["end_date"])
-        logging.info(f"New job submitted: {job['id']} | Start: {data['start_date']} | End: {data['end_date']}")
-        return jsonify({"job_id": job['id'], "status": "submitted"}), 201
+        job = add_job(data["start_date"], data["end_date"], data["method"])
+        logging.info(f"New job submitted: {job['id']} | Method: {data["method"]} | Start: {data['start_date']} | End: {data['end_date']}")
+        return jsonify({"job_id": job['id'], "status": job["status"]}), 201
 
     except Exception as e:
         logging.error(f"Exception in create_job: {str(e)}")

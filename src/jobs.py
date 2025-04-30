@@ -77,7 +77,7 @@ def _queue_job(jid):
     q.put(jid)
     return
 
-def add_job(start, end, status="submitted"):
+def add_job(start, end, method, status="submitted"):
     """Add a job to the redis queue.
     
     Args:
