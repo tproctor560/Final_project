@@ -352,16 +352,20 @@ def get_job(jobid: str):
 
 
 @app.route('/results/<jobid>', methods=['GET'])
-def get_injury_rates(jobid: str):
+def get_injury_summary(jobid: str):
+    """
+    Returns counts of injury plays and total plays for each
+    (Formation, PlayType, Direction) combo from nfl_data within date range.
+    """
     logging.debug(f"Fetching analysis result for job {jobid}")
-
     try:
-        # Check cache
-        if results_db.type(jobid) == "string":
-            cached = results_db.get(jobid)
+        # Check if result already cached
+        result = results_db.get(jobid)
+        if result:
             logging.info(f"Returning cached result for job {jobid}")
-            return jsonify(json.loads(cached)), 200
+            return jsonify(json.loads(result)), 200
 
+        # Get job metadata
         job_data_raw = jdb.get(jobid)
         if not job_data_raw:
             return jsonify({"error": "Job ID not found"}), 404
@@ -374,73 +378,17 @@ def get_injury_rates(jobid: str):
                 "status": job_data.get("status", "unknown")
             }), 202
 
-        start_date = datetime.strptime(job_data["start"], "%Y-%m-%d")
-        end_date = datetime.strptime(job_data["end"], "%Y-%m-%d")
-
-        raw_data = rd.get("nfl_data")
-        if not raw_data:
-            return jsonify({"error": "No NFL data available"}), 500
-
-        play_list = json.loads(raw_data)
-        filtered = [p for p in play_list if "injured" in p.get("Description", "").lower()]
-
-        rush_total_all, rush_injuries = {}, {}
-        pass_total_all, pass_injuries = {}, {}
-
-        for play in play_list:
-            formation = play.get("Formation", "Unknown")
-            ptype = play.get("PlayType", "").lower()
-            if ptype == "rush":
-                detail = play.get("RushDirection", "Unknown")
-                key = f"{formation};Rush;{detail}"
-                rush_total_all[key] = rush_total_all.get(key, 0) + 1
-            elif ptype == "pass":
-                detail = play.get("PassType", "Unknown")
-                key = f"{formation};Pass;{detail}"
-                pass_total_all[key] = pass_total_all.get(key, 0) + 1
-
-        for play in filtered:
-            try:
-                p_date = datetime.strptime(play.get("GameDate", "1900-01-01"), "%Y-%m-%d")
-                if not (start_date <= p_date <= end_date):
-                    continue
-
-                formation = play.get("Formation", "Unknown")
-                ptype = play.get("PlayType", "").lower()
-                if ptype == "rush":
-                    detail = play.get("RushDirection", "Unknown")
-                    key = f"{formation};Rush;{detail}"
-                    rush_injuries[key] = rush_injuries.get(key, 0) + 1
-                elif ptype == "pass":
-                    detail = play.get("PassType", "Unknown")
-                    key = f"{formation};Pass;{detail}"
-                    pass_injuries[key] = pass_injuries.get(key, 0) + 1
-            except Exception:
-                continue
-
-        rush_output = [
-            f"Formation: {k.split(';')[0]}; PlayType: {k.split(';')[1]}; Direction: {k.split(';')[2]} -> {rush_injuries.get(k, 0)} injury plays, {rush_total_all[k]} total plays"
-            for k in rush_total_all
-        ]
-
-        pass_output = [
-            f"Formation: {k.split(';')[0]}; PlayType: {k.split(';')[1]}; Direction: {k.split(';')[2]} -> {pass_injuries.get(k, 0)} injury plays, {pass_total_all[k]} total plays"
-            for k in pass_total_all
-        ]
-
-        result = {
+        output = {
             "job_id": jobid,
-            "start_date": job_data["start"],
-            "end_date": job_data["end"],
-            "rush_results": rush_output,
-            "pass_results": pass_output
+            "start_date": job_data.get("start"),
+            "end_date": job_data.get("end"),
+            "injury_combo_counts": job_data.get("injury_combo_counts", {})
         }
 
-        results_db.set(jobid, json.dumps(result))
-        return jsonify(result), 200
+        return jsonify(output), 200
 
     except Exception as e:
-        logging.error(f"Unexpected error in get_injury_rates({jobid}): {e}")
+        logging.error(f"Unexpected error in get_injury_summary({jobid}): {e}")
         return jsonify({"error": f"Unexpected error: {e}"}), 500
 
 
