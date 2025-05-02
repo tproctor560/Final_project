@@ -390,3 +390,4 @@ def get_locus_types(jobid: str):
 
 if __name__ == "__main__":
     app.run(debug=True, host='0.0.0.0')
+    load_data_from_csv()
