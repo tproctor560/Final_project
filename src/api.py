@@ -178,65 +178,52 @@ def rush_pull():
 
 @app.route('/jobs', methods=['POST'])
 def create_job():
-    """
-    Creates a new job with a unique identifier, where the request must include 'start_date' 
-    and 'end_date' in the JSON body, both formatted as YYYY-MM-DD.
-    
-    The route will validate these inputs and, if valid, create a new job entry in Redis 
-    and queue it for processing.
-    
-    Args: none
-    Returns: JSON response with job ID and submission status if successful, 
-            or an error message and failure code.
-    """
     logging.debug("Job creation request received.")
     try:
         data = request.get_json()
-        cached_data = rd.get("hgnc_data")
-        oldest_date = cached_data['GameDate'].min()  
-        newest_date = cached_data['GameDate'].max()
 
-        # Validate the date range data
+        # Load and parse Redis data
+        cached_data = json.loads(rd.get("hgnc_data"))
+        df = pd.DataFrame(cached_data)
+        oldest_date = df['GameDate'].min()
+        newest_date = df['GameDate'].max()
+
         if not data or "start_date" not in data or "end_date" not in data:
-            logging.warning("Job creation failed: missing dates.")
-            logging.info("Setting the dates to the maximum and minimum of this dataset")
+            logging.warning("Missing start_date or end_date — defaulting to full range.")
             data["start_date"] = oldest_date
             data["end_date"] = newest_date
-            
+
         if "method" not in data:
-            logging.warning("Job creation failed: missing method")
+            logging.warning("Job creation failed: missing method.")
             return jsonify({
-                "error": "You must provide a method either plays/, or injuries/, refer to the documentation for more help"
+                "error": "You must provide a method either plays/ or injuries/, refer to the documentation."
             }), 400
 
-        # Validate the date format
         try:
             datetime.strptime(data["start_date"], "%Y-%m-%d")
             datetime.strptime(data["end_date"], "%Y-%m-%d")
-            
+
             if data["start_date"] < oldest_date or data["end_date"] > newest_date:
-                logging.warning("Dates are not in the bounds")
-                raise Exception("Dates are not in the bounds")
+                raise ValueError("Dates are out of bounds.")
         except Exception as e:
-            logging.warning(f"Job creation failed: invalid date format. Check {e}")
+            logging.warning(f"Invalid dates: {e}")
             return jsonify({
-                "error": "Dates must be in YYYY-MM-DD format. and must be in the bounds"
+                "error": "Dates must be in YYYY-MM-DD format and within dataset range."
             }), 400
-            
-        if not data["method"].startswith("plays/") or not data["method"].startswith("injury/"):
+
+        if not (data["method"].startswith("plays/") or data["method"].startswith("injury/")):
             logging.warning("Job creation failed: invalid method.")
             return jsonify({
-                "error": "Methods should start with plays/ or injury/, and then specific play ids after"
+                "error": "Method must start with plays/ or injury/."
             }), 400
-        
+
         job = add_job(data["start_date"], data["end_date"], data["method"])
-        logging.info(f"New job submitted: {job['id']} | Method: {data["method"]} | Start: {data['start_date']} | End: {data['end_date']}")
+        logging.info(f"New job submitted: {job['id']} | Method: {data['method']} | Start: {data['start_date']} | End: {data['end_date']}")
         return jsonify({"job_id": job['id'], "status": job["status"]}), 201
 
     except Exception as e:
         logging.error(f"Exception in create_job: {str(e)}")
         return jsonify({"error": str(e)}), 500
-
 
 @app.route('/jobs', methods=['GET'])
 def list_jobs():
