@@ -67,11 +67,133 @@ def load_and_return():
     except Exception as e:
         return jsonify({"error": f"Failed to load and return data: {str(e)}"}), 500
 
+@app.route('help', methods = ['???']) wihc is a /help endpoint describing all the routes within
+
+
+@app.route('/data', methods = ['POST'])
+def pull_data():
+    """
+    Loads NFL play-by-play data from a CSV file and stores it in Redis.
+    Args: none
+    Returns: jsonify: JSON response describing the outcome of the function.
+    """
+    logging.debug("Request to load NFL play-by-play data received.")
+
+    try:
+        # Load CSV data into a pandas DataFrame
+        df = pd.read_csv(CSV_FILE_PATH)
+
+        # Print out the column names for debugging purposes
+        logging.debug(f"CSV Columns: {df.columns.tolist()}")
+
+        # Check if the CSV contains the necessary columns
+        required_columns = ['Formation', 'PlayType', 'Description', 'RushDirection', 'PassType']
+        if not all(col in df.columns for col in required_columns):
+            logging.error(f"CSV file is missing required columns. Found columns: {df.columns}")
+            return jsonify({"error": "CSV file is missing required columns"}), 400
+
+        # Handle missing or invalid data
+        df['Formation'] = df['Formation'].fillna('Unknown')  # Fill missing formation with 'Unknown'
+        df['PlayType'] = df['PlayType'].fillna('Unknown')  # Fill missing play type with 'Unknown'
+        df['Description'] = df['Description'].fillna('No description')  # Fill missing description
+        df['RushDirection'] = df['RushDirection'].fillna('Unknown')  # Fill missing rush direction
+        df['PassType'] = df['PassType'].fillna('Unknown')  # Fill missing pass type
+
+        # Add play_id as a unique identifier for each row
+        df['play_id'] = range(1, len(df) + 1)  # Sequential play_id (1-based index)
+
+        # Convert the DataFrame to a list of dictionaries
+        data = df[['play_id', 'Formation', 'PlayType', 'Description', 'RushDirection', 'PassType']].to_dict(orient='records')
+
+        # Store the data in Redis
+        rd.set("nfl_data", json.dumps(data))  # Store using a string key
+
+        logging.info("NFL play-by-play data successfully fetched and stored in Redis.")
+        return jsonify({"message": "NFL play-by-play data loaded successfully"}), 201
+
+    except Exception as e:
+        logging.error(f"Error loading data from CSV: {str(e)}")
+        return jsonify({"error": f"Error loading data from CSV: {str(e)}"}), 500
+        
+@app.route('/data', methods = ['GET'])
+def return_data():
+    """
+    Returns the cached NFL play-by-play data from Redis.
+    Args: None
+    Returns: The cached data or an error message.
+    """
+    logging.debug("Request to retrieve NFL play-by-play data received.")
+    cached_data = rd.get("nfl_data")
+    if cached_data:
+        logging.info("Data retrieved from Redis cache.")
+        return jsonify(json.loads(cached_data))
+    return jsonify({"error": "No NFL play-by-play data available"}), 500
+
+
+@app.route('data', methods=['DELETE'])
+def delete():
+    """
+    Deletes the cached NFL play-by-play data from Redis.
+    Args: None
+    Returns: A message regarding the outcome of the function.
+    """
+    logging.debug("Request to delete NFL play-by-play data received.")
+    deleted_data = rd.delete("nfl_data")
+    if deleted_data > 0:
+        logging.info("NFL play-by-play data deleted from Redis cache.")
+        return "", 204  # No Content (successful delete)
+    logging.warning("No NFL play-by-play data found to delete.")
+    return jsonify({"error": "No NFL play-by-play data found in Redis."}), 404  # Data not found
+
+
+@app.route('/plays', methods=['GET'])
+def load_plays
+    """
+    Loads data from CSV into Redis and returns the data immediately.
+    """
+    try:
+        # Load CSV data into a pandas DataFrame
+        df = pd.read_csv(CSV_FILE_PATH)
+
+        required_columns = ['Formation', 'PlayType', 'Description', 'RushDirection', 'PassType']
+        if not all(col in df.columns for col in required_columns):
+            return jsonify({"error": "CSV file is missing required columns"}), 400
+
+        df['Formation'] = df['Formation'].fillna('Unknown')
+        df['PlayType'] = df['PlayType'].fillna('Unknown')
+        df['Description'] = df['Description'].fillna('No description')
+        df['RushDirection'] = df['RushDirection'].fillna('Unknown')
+        df['PassType'] = df['PassType'].fillna('Unknown')
+
+        # ✅ Safely parse GameDate and convert to string
+        df['GameDate'] = pd.to_datetime(df['GameDate'], errors='coerce')  # convert invalid dates to NaT
+        df['GameDate'] = df['GameDate'].fillna(pd.Timestamp("1900-01-01"))  # fallback
+        df['GameDate'] = df['GameDate'].dt.strftime('%Y-%m-%d')  # convert to string
+
+        df['play_id'] = range(1, len(df) + 1)
+
+        selected_columns = [
+            'play_id', 'GameId', 'GameDate', 'Quarter', 'Minute', 'Second', 'OffenseTeam', 'DefenseTeam',
+            'Down', 'ToGo', 'YardLine', 'SeriesFirstDown', 'NextScore', 'Description', 'TeamWin',
+            'SeasonYear', 'Yards', 'Formation', 'PlayType', 'IsRush', 'IsPass', 'IsIncomplete',
+            'IsTouchdown', 'PassType', 'IsSack', 'IsChallenge', 'IsChallengeReversed', 'Challenger',
+            'IsMeasurement', 'IsInterception', 'IsFumble', 'IsPenalty', 'IsTwoPointConversion',
+            'IsTwoPointConversionSuccessful', 'RushDirection', 'YardLineFixed', 'YardLineDirection',
+            'IsPenaltyAccepted', 'PenaltyTeam', 'IsNoPlay', 'PenaltyType', 'PenaltyYards'
+        ]
+
+        data = df[selected_columns].to_dict(orient='records')
+        rd.set("hgnc_data", json.dumps(data))
+
+        return jsonify(data), 201
+
+    except Exception as e:
+        return jsonify({"error": f"Failed to load and return data: {str(e)}"}), 500
 
 
 
-@app.route('/plays/play_structure', methods=['GET', 'DELETE'])
-def get_all_genes():
+@app.route('/plays/<play_id>', methods=['GET'])
+def get_play_structure():
     """
     Retrieves the formation, playtype, and description for each play, 
     additionally it returns the rush direction if the playtype=rush 
@@ -103,27 +225,6 @@ def get_all_genes():
         return jsonify(play_data), 200
 
     return jsonify({"error": "No play structure data available"}), 500
-
-
-@app.route('/plays/<play_id>', methods=['GET'])
-def gene_pull(play_id: str):
-    """
-    Retrieves a specific play structure based off the unique play_id.
-    Args: play_id (str): The unique identifier of the play.
-    Returns: A JSON response containing the play details or an error message if not found.
-    """
-    logging.debug(f"Request to retrieve play structure for play_id: {play_id} received.")
-    cached_data = rd.get("hgnc_data")
-    if cached_data:
-        logging.info("Data retrieved from Redis cache.")
-        data = json.loads(cached_data)
-        
-        # Search for the play with the provided play_id
-        for item in data:
-            if item.get("play_id") == play_id:
-                return jsonify(item), 200
-
-    return jsonify({"error": f"Play with id {play_id} not found"}), 404
 
 
 @app.route('/plays/pass', methods=['GET'])
@@ -176,6 +277,7 @@ def rush_pull():
         return jsonify({"error": f"Error: {e}"}), 404
 
 
+
 @app.route('/jobs', methods=['POST'])
 def create_job():
     logging.debug("Job creation request received.")
@@ -225,6 +327,8 @@ def create_job():
         logging.error(f"Exception in create_job: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+
+
 @app.route('/jobs', methods=['GET'])
 def list_jobs():
     """
@@ -265,19 +369,18 @@ def get_job(jobid: str):
         return jsonify({"error": "Internal server error"}), 500
 
 
-#TODO: Replace this
 @app.route('/results/<jobid>', methods=['GET'])
-def get_locus_types(jobid: str):
+def get_play_structure_types(jobid: str):
     """
     Given that the word "injured" appears in the description column, 
-    calculate the injury rate for specific combinations of play formation 
-    and rush direction, and output this as a percentage of the total number 
-    of plays for that combo.
-    
-    Args: jobid (str): The unique identifier of the job request.
-    
-    Returns: JSON Flask response containing the result counter data, 
-            a status message if the job is not yet complete, or an error message.
+    calculate the injury rate for combinations of play formation and 
+    rush direction (if rush) or pass type (if pass), within the job's 
+    requested date range.
+
+    Args: jobid (str) - the unique identifier of the job request
+
+    Returns: JSON Flask response containing the result counter data,
+             or status/error messages if job is not ready or invalid.
     """
     logging.debug(f"Fetching analysis result for job {jobid}")
     try:
@@ -286,7 +389,7 @@ def get_locus_types(jobid: str):
             logging.info(f"Returning cached result for job {jobid}")
             return jsonify(json.loads(result)), 200
 
-        job_data = r.hgetall(jobid)
+        job_data = jdb.hgetall(jobid)
         if not job_data:
             logging.warning(f"Job ID {jobid} not found.")
             return jsonify({"error": "Job ID not found"}), 404
@@ -298,41 +401,82 @@ def get_locus_types(jobid: str):
                 "status": status
             }), 202
 
-        raw_data = json.loads(r.get("hgnc_data") or "{}")
-        nfl_data = raw_data.get("response", {}).get("docs", [])
+        start_date_str = job_data.get("start_date")
+        end_date_str = job_data.get("end_date")
+        if not start_date_str or not end_date_str:
+            return jsonify({"error": "Job is missing start or end date"}), 400
 
-        # Filter plays that contain the word "injured" in the description
-        filtered_plays = [play for play in nfl_data if "injured" in play.get("description", "").lower()]
-        
-        # Count occurrences by formation type and rush direction
-        injury_counts = {}
+        try:
+            start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
+            end_date = datetime.strptime(end_date_str, "%Y-%m-%d")
+        except ValueError:
+            return jsonify({"error": "Invalid date format. Use YYYY-MM-DD."}), 400
+
+        raw_data = rd.get("hgnc_data")
+        if not raw_data:
+            return jsonify({"error": "No NFL data found in Redis."}), 500
+
+        play_list = json.loads(raw_data)
+
+        # Filter plays within date range and that mention 'injured'
+        filtered_plays = []
+        for play in play_list:
+            try:
+                play_date = datetime.strptime(play.get("GameDate", "1900-01-01"), "%Y-%m-%d")
+                if start_date <= play_date <= end_date and "injured" in play.get("Description", "").lower():
+                    filtered_plays.append(play)
+            except ValueError:
+                continue
+
+        # Separate counters for rush and pass
+        rush_counts = {}
+        pass_counts = {}
+        total_rush = 0
+        total_pass = 0
+
         for play in filtered_plays:
-            formation = play.get("formation", "Unknown")
-            rush_direction = play.get("rush_direction", "Unknown")
-            combo = f"{formation} - {rush_direction}"
-            
-            injury_counts[combo] = injury_counts.get(combo, 0) + 1
-        
-        # Calculate the injury rate percentage for each combo
-        total_combos = len(filtered_plays)
-        injury_percentage = {
-            combo: (count / total_combos) * 100 if total_combos else 0
-            for combo, count in injury_counts.items()
+            play_type = play.get("PlayType", "").lower()
+            formation = play.get("Formation", "Unknown")
+
+            if play_type == "rush":
+                rush_dir = play.get("RushDirection", "Unknown")
+                combo = f"{formation} - {rush_dir}"
+                rush_counts[combo] = rush_counts.get(combo, 0) + 1
+                total_rush += 1
+            elif play_type == "pass":
+                pass_type = play.get("PassType", "Unknown")
+                combo = f"{formation} - {pass_type}"
+                pass_counts[combo] = pass_counts.get(combo, 0) + 1
+                total_pass += 1
+
+        rush_percentages = {
+            combo: (count / total_rush) * 100 if total_rush else 0
+            for combo, count in rush_counts.items()
+        }
+
+        pass_percentages = {
+            combo: (count / total_pass) * 100 if total_pass else 0
+            for combo, count in pass_counts.items()
         }
 
         output = {
             "job_id": jobid,
-            "injury_percentage": injury_percentage,
-            "total_plays_counted": total_combos
+            "start_date": start_date_str,
+            "end_date": end_date_str,
+            "total_rush_injuries": total_rush,
+            "total_pass_injuries": total_pass,
+            "injury_percentage_by_rush_combo": rush_percentages,
+            "injury_percentage_by_pass_combo": pass_percentages
         }
 
-        results_db.set(jobid, json.dumps(output))  # Cache in results DB
-        logging.info(f"Generated result for job {jobid}: {total_combos} injuries counted.")
+        results_db.set(jobid, json.dumps(output))
+        logging.info(f"Generated result for job {jobid}: {total_rush + total_pass} injuries counted.")
         return jsonify(output), 200
 
     except Exception as e:
-        logging.error(f"Unexpected error in get_locus_types({jobid}): {str(e)}")
+        logging.error(f"Unexpected error in get_play_structure_types({jobid}): {str(e)}")
         return jsonify({"error": f"Unexpected error: {str(e)}"}), 500
+
 
 
 if __name__ == "__main__":
