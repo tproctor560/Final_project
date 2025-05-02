@@ -1,4 +1,3 @@
-
 import requests
 import uuid
 import math
@@ -9,16 +8,11 @@ import json
 import os
 import redis
 from datetime import datetime
-from jobs import add_job
-from jobs import get_job_by_id
-from jobs import jdb
-from jobs import results_db
-
+from jobs import add_job, get_job_by_id, jdb, results_db
 
 app = Flask(__name__)
 log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
-logging.basicConfig(level=logging.DEBUG)
-
+logging.basicConfig(level=getattr(logging, log_level))
 
 def get_redis_client() -> redis.Redis:
     """
@@ -29,15 +23,14 @@ def get_redis_client() -> redis.Redis:
 rd = get_redis_client()
 CSV_FILE_PATH = os.path.join(os.path.dirname(__file__), 'data', 'pbp-2024.csv')
 
-def load_data_from_csv():
+@app.route("/data", methods=["POST"])
+def load_data():
     """
-    Loads NFL play-by-play data from a CSV file and stores it in Redis.
-    Args: none
-    Returns: jsonify: JSON response describing the outcome of the function.
+    Loads NFL play-by-play data from a CSV file into Redis.
     """
     logging.debug("Loading NFL play-by-play data received.")
     try:
-            # Load CSV data into a pandas DataFrame
+        # Load CSV data into a pandas DataFrame
         df = pd.read_csv(CSV_FILE_PATH)
 
         # Print out the column names for debugging purposes
@@ -50,68 +43,63 @@ def load_data_from_csv():
             return jsonify({"error": "CSV file is missing required columns"}), 400
 
         # Handle missing or invalid data
-        df['Formation'] = df['Formation'].fillna('Unknown')  # Fill missing formation with 'Unknown'
-        df['PlayType'] = df['PlayType'].fillna('Unknown')  # Fill missing play type with 'Unknown'
-        df['Description'] = df['Description'].fillna('No description')  # Fill missing description
-        df['RushDirection'] = df['RushDirection'].fillna('Unknown')  # Fill missing rush direction
-        df['PassType'] = df['PassType'].fillna('Unknown')  # Fill missing pass type
+        df['Formation'] = df['Formation'].fillna('Unknown')
+        df['PlayType'] = df['PlayType'].fillna('Unknown')
+        df['Description'] = df['Description'].fillna('No description')
+        df['RushDirection'] = df['RushDirection'].fillna('Unknown')
+        df['PassType'] = df['PassType'].fillna('Unknown')
         if not pd.api.types.is_datetime64_any_dtype(df['GameDate']):
             df['GameDate'] = pd.to_datetime(df['GameDate'])
 
-        # Add play_id as a unique identifier for each row
-        df['play_id'] = range(1, len(df) + 1)  # Sequential play_id (1-based index)
+        # Add unique play_id
+        df['play_id'] = range(1, len(df) + 1)
 
-        # Convert the DataFrame to a list of dictionaries
-        data = df[['play_id', "GameId", "GameDate", "Quarter", "Minute", "Second", "OffenseTeam", "DefenseTeam", "Down", "ToGo", "YardLine", "SeriesFirstDown", "NextScore", "Description", "TeamWin", "SeasonYear", "Yards", "Formation", "PlayType", "IsRush", "IsPass", "IsIncomplete", "IsTouchdown", "PassType", "IsSack", "IsChallenge", "IsChallengeReversed", "Challenger", "IsMeasurement", "IsInterception", "IsFumble", "IsPenalty", "IsTwoPointConversion", "IsTwoPointConversionSuccessful", "RushDirection", "YardLineFixed", "YardLineDirection", "IsPenaltyAccepted", "PenaltyTeam", "IsNoPlay", "PenaltyType", "PenaltyYards"]].to_dict(orient='records')
+        # Select relevant columns
+        selected_columns = [
+            'play_id', 'GameId', 'GameDate', 'Quarter', 'Minute', 'Second', 'OffenseTeam', 'DefenseTeam',
+            'Down', 'ToGo', 'YardLine', 'SeriesFirstDown', 'NextScore', 'Description', 'TeamWin',
+            'SeasonYear', 'Yards', 'Formation', 'PlayType', 'IsRush', 'IsPass', 'IsIncomplete',
+            'IsTouchdown', 'PassType', 'IsSack', 'IsChallenge', 'IsChallengeReversed', 'Challenger',
+            'IsMeasurement', 'IsInterception', 'IsFumble', 'IsPenalty', 'IsTwoPointConversion',
+            'IsTwoPointConversionSuccessful', 'RushDirection', 'YardLineFixed', 'YardLineDirection',
+            'IsPenaltyAccepted', 'PenaltyTeam', 'IsNoPlay', 'PenaltyType', 'PenaltyYards'
+        ]
 
-        # Store the data in Redis
-        rd.set("hgnc_data", json.dumps(data))  # Store using a string key
+        data = df[selected_columns].to_dict(orient='records')
 
-        logging.info("NFL play-by-play data successfully fetched and stored in Redis.")
+        # Store data in Redis
+        rd.set("hgnc_data", json.dumps(data))
+
+        logging.info("NFL play-by-play data successfully loaded into Redis.")
         return jsonify({"message": "NFL play-by-play data loaded successfully"}), 201
 
     except Exception as e:
         logging.error(f"Error loading data from CSV: {str(e)}")
         return jsonify({"error": f"Error loading data from CSV: {str(e)}"}), 500
 
-
-
-@app.route('/plays', methods=['GET', 'DELETE'])
-def pull_data():
+@app.route("/plays", methods=["GET"])
+def get_plays():
     """
-    Loads NFL play-by-play data from a CSV file and stores it in Redis.
-    Args: none
-    Returns: jsonify: JSON response describing the outcome of the function.
+    Returns all NFL play-by-play data from Redis.
     """
-    logging.debug("Request to load NFL play-by-play data received.")
-    
-    if request.method == 'GET':
-        try:
-            logging.debug("Request to retrieve NFL play-by-play data received.")
-            cached_data = rd.get("hgnc_data")
-            if cached_data:
-                logging.info("Data retrieved from Redis cache.")
-                return jsonify(json.loads(cached_data))
-            return jsonify({"error": "No NFL play-by-play data available"}), 500
-        except Exception as e:
-            logging.error(f"Error loading data from CSV: {str(e)}")
-            return jsonify({"error": f"Error loading data from CSV: {str(e)}"}), 500
+    try:
+        data = rd.get("hgnc_data")
+        if not data:
+            return jsonify({"error": "No data found in Redis. Please load data first."}), 404
 
-    elif request.method == 'DELETE':
-        try:
-            logging.debug("Request to delete NFL play-by-play data received.")
-            deleted_data = rd.delete("hgnc_data")
-            if deleted_data > 0:
-                logging.info("NFL play-by-play data deleted from Redis cache.")
-                return "", 204  # No Content (successful delete)
-            logging.warning("No NFL play-by-play data found to delete.")
-            return jsonify({"error": "No NFL play-by-play data found in Redis."}), 404  # Data not found
-        except Exception as e:
-            logging.error(f"Error loading data from CSV: {str(e)}")
-            return jsonify({"error": f"Error loading data from CSV: {str(e)}"}), 500
+        plays = json.loads(data)
+        return jsonify(plays), 200
+
+    except Exception as e:
+        logging.error(f"Error retrieving plays from Redis: {str(e)}")
+        return jsonify({"error": "Failed to fetch plays"}), 500
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
 
 
-@app.route('/plays/play_structure', methods=['GET'])
+
+@app.route('/plays/play_structure', methods=['GET' 'DELETE'])
 def get_all_genes():
     """
     Retrieves the formation, playtype, and description for each play, 
