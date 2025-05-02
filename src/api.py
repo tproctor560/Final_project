@@ -41,8 +41,11 @@ def load_and_return():
         df['Description'] = df['Description'].fillna('No description')
         df['RushDirection'] = df['RushDirection'].fillna('Unknown')
         df['PassType'] = df['PassType'].fillna('Unknown')
-        if not pd.api.types.is_datetime64_any_dtype(df['GameDate']):
-            df['GameDate'] = df['GameDate'].dt.strftime('%Y-%m-%d')
+
+        # ✅ Safely parse GameDate and convert to string
+        df['GameDate'] = pd.to_datetime(df['GameDate'], errors='coerce')  # convert invalid dates to NaT
+        df['GameDate'] = df['GameDate'].fillna(pd.Timestamp("1900-01-01"))  # fallback
+        df['GameDate'] = df['GameDate'].dt.strftime('%Y-%m-%d')  # convert to string
 
         df['play_id'] = range(1, len(df) + 1)
 
