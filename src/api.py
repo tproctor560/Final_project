@@ -23,50 +23,6 @@ def get_redis_client() -> redis.Redis:
 rd = get_redis_client()
 CSV_FILE_PATH = os.path.join(os.path.dirname(__file__), 'data', 'pbp-2024.csv')
 
-@app.route('/plays/load', methods=['POST'])
-def load_and_return():
-    """
-    Loads data from CSV into Redis and returns the data immediately.
-    """
-    try:
-        # Load CSV data into a pandas DataFrame
-        df = pd.read_csv(CSV_FILE_PATH)
-
-        required_columns = ['Formation', 'PlayType', 'Description', 'RushDirection', 'PassType']
-        if not all(col in df.columns for col in required_columns):
-            return jsonify({"error": "CSV file is missing required columns"}), 400
-
-        df['Formation'] = df['Formation'].fillna('Unknown')
-        df['PlayType'] = df['PlayType'].fillna('Unknown')
-        df['Description'] = df['Description'].fillna('No description')
-        df['RushDirection'] = df['RushDirection'].fillna('Unknown')
-        df['PassType'] = df['PassType'].fillna('Unknown')
-
-        # ✅ Safely parse GameDate and convert to string
-        df['GameDate'] = pd.to_datetime(df['GameDate'], errors='coerce')  # convert invalid dates to NaT
-        df['GameDate'] = df['GameDate'].fillna(pd.Timestamp("1900-01-01"))  # fallback
-        df['GameDate'] = df['GameDate'].dt.strftime('%Y-%m-%d')  # convert to string
-
-        df['play_id'] = range(1, len(df) + 1)
-
-        selected_columns = [
-            'play_id', 'GameId', 'GameDate', 'Quarter', 'Minute', 'Second', 'OffenseTeam', 'DefenseTeam',
-            'Down', 'ToGo', 'YardLine', 'SeriesFirstDown', 'NextScore', 'Description', 'TeamWin',
-            'SeasonYear', 'Yards', 'Formation', 'PlayType', 'IsRush', 'IsPass', 'IsIncomplete',
-            'IsTouchdown', 'PassType', 'IsSack', 'IsChallenge', 'IsChallengeReversed', 'Challenger',
-            'IsMeasurement', 'IsInterception', 'IsFumble', 'IsPenalty', 'IsTwoPointConversion',
-            'IsTwoPointConversionSuccessful', 'RushDirection', 'YardLineFixed', 'YardLineDirection',
-            'IsPenaltyAccepted', 'PenaltyTeam', 'IsNoPlay', 'PenaltyType', 'PenaltyYards'
-        ]
-
-        data = df[selected_columns].to_dict(orient='records')
-        rd.set("hgnc_data", json.dumps(data))
-
-        return jsonify(data), 201
-
-    except Exception as e:
-        return jsonify({"error": f"Failed to load and return data: {str(e)}"}), 500
-
 @app.route('/help', methods=['GET'])
 def help():
     return jsonify({
@@ -208,7 +164,7 @@ def load_plays():
 
 
 @app.route('/plays/<play_id>', methods=['GET'])
-def get_play_structure():
+def get_play_structure(play_id):
     """
     Retrieves the formation, playtype, and description for each play, 
     additionally it returns the rush direction if the playtype=rush 
