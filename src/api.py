@@ -93,9 +93,9 @@ def get_all_genes():
                 "description": item.get("Description"),
             }
 
-            if item.get("play_type") == "rush":
+            if item.get("PlayType") == "rush":
                 play_info["rush_direction"] = item.get("RushDirection")
-            elif item.get("play_type") == "pass":
+            elif item.get("PlayType") == "pass":
                 play_info["pass_type"] = item.get("PassType")
 
             play_data.append(play_info)
