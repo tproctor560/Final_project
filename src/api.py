@@ -166,36 +166,35 @@ def load_plays():
 @app.route('/plays/<play_id>', methods=['GET'])
 def get_play_structure(play_id):
     """
-    Retrieves the formation, playtype, and description for each play, 
-    additionally it returns the rush direction if the playtype=rush 
-    and the pass type if the playtype=pass.
-    Returns: A JSON response with all play data.
+    Retrieves the formation, playtype, and description for a specific play_id.
+    Also includes rush direction or pass type if applicable.
     """
-    logging.debug("Request to retrieve all play structure data received.")
+    logging.debug(f"Request to retrieve play with play_id: {play_id}")
     cached_data = rd.get("hgnc_data")
-    if cached_data:
-        logging.info("Data retrieved from Redis cache.")
-        data = json.loads(cached_data)
-        play_data = []
+    
+    if not cached_data:
+        return jsonify({"error": "No play structure data available"}), 500
 
-        for item in data:
+    data = json.loads(cached_data)
+
+    for item in data:
+        if str(item.get("play_id")) == str(play_id):
             play_info = {
-                "play_id": item.get("play_id"),  # Use the play_id from the data
+                "play_id": item.get("play_id"),
                 "formation": item.get("Formation"),
                 "play_type": item.get("PlayType"),
-                "description": item.get("Description"),
+                "description": item.get("Description")
             }
 
-            if item.get("PlayType") == "rush":
+            if item.get("PlayType", "").lower() == "rush":
                 play_info["rush_direction"] = item.get("RushDirection")
-            elif item.get("PlayType") == "pass":
+            elif item.get("PlayType", "").lower() == "pass":
                 play_info["pass_type"] = item.get("PassType")
 
-            play_data.append(play_info)
+            return jsonify(play_info), 200
 
-        return jsonify(play_data), 200
+    return jsonify({"error": f"Play ID {play_id} not found"}), 404
 
-    return jsonify({"error": "No play structure data available"}), 500
 
 
 @app.route('/plays/pass', methods=['GET'])
