@@ -354,16 +354,18 @@ def get_job(jobid: str):
 @app.route('/results/<jobid>', methods=['GET'])
 def get_injury_rates(jobid: str):
     logging.debug(f"Fetching analysis result for job {jobid}")
+
     try:
+        # Check cache
         if results_db.type(jobid) == "string":
             cached = results_db.get(jobid)
             logging.info(f"Returning cached result for job {jobid}")
             return jsonify(json.loads(cached)), 200
 
-        # Get job metadata
         job_data_raw = jdb.get(jobid)
         if not job_data_raw:
             return jsonify({"error": "Job ID not found"}), 404
+
         job_data = json.loads(job_data_raw)
 
         if job_data.get("status") != "complete":
@@ -382,40 +384,36 @@ def get_injury_rates(jobid: str):
         play_list = json.loads(raw_data)
         filtered = [p for p in play_list if "injured" in p.get("Description", "").lower()]
 
-        rush_total_all, pass_total_all = {}, {}
-        rush_injuries, pass_injuries = {}, {}
+        rush_total_all, rush_injuries = {}, {}
+        pass_total_all, pass_injuries = {}, {}
 
         for play in play_list:
-            play_type = play.get("PlayType", "").lower()
             formation = play.get("Formation", "Unknown")
-
-            if play_type == "rush":
-                direction = play.get("RushDirection", "Unknown")
-                key = f"{formation};Rush;{direction}"
+            ptype = play.get("PlayType", "").lower()
+            if ptype == "rush":
+                detail = play.get("RushDirection", "Unknown")
+                key = f"{formation};Rush;{detail}"
                 rush_total_all[key] = rush_total_all.get(key, 0) + 1
-
-            elif play_type == "pass":
-                direction = play.get("PassType", "Unknown")
-                key = f"{formation};Pass;{direction}"
+            elif ptype == "pass":
+                detail = play.get("PassType", "Unknown")
+                key = f"{formation};Pass;{detail}"
                 pass_total_all[key] = pass_total_all.get(key, 0) + 1
 
         for play in filtered:
             try:
-                date = datetime.strptime(play.get("GameDate", "1900-01-01"), "%Y-%m-%d")
-                if not (start_date <= date <= end_date):
+                p_date = datetime.strptime(play.get("GameDate", "1900-01-01"), "%Y-%m-%d")
+                if not (start_date <= p_date <= end_date):
                     continue
 
-                play_type = play.get("PlayType", "").lower()
                 formation = play.get("Formation", "Unknown")
-
-                if play_type == "rush":
-                    direction = play.get("RushDirection", "Unknown")
-                    key = f"{formation};Rush;{direction}"
+                ptype = play.get("PlayType", "").lower()
+                if ptype == "rush":
+                    detail = play.get("RushDirection", "Unknown")
+                    key = f"{formation};Rush;{detail}"
                     rush_injuries[key] = rush_injuries.get(key, 0) + 1
-
-                elif play_type == "pass":
-                    direction = play.get("PassType", "Unknown")
-                    key = f"{formation};Pass;{direction}"
+                elif ptype == "pass":
+                    detail = play.get("PassType", "Unknown")
+                    key = f"{formation};Pass;{detail}"
                     pass_injuries[key] = pass_injuries.get(key, 0) + 1
             except Exception:
                 continue
@@ -444,6 +442,7 @@ def get_injury_rates(jobid: str):
     except Exception as e:
         logging.error(f"Unexpected error in get_injury_rates({jobid}): {e}")
         return jsonify({"error": f"Unexpected error: {e}"}), 500
+
 
 
 if __name__ == "__main__":
