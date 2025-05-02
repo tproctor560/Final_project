@@ -347,23 +347,26 @@ def get_play_structure_types(jobid: str):
     rush direction (if rush) or pass type (if pass), within the job's 
     requested date range.
 
-    Args: jobid (str) - the unique identifier of the job request
+    Args: jobid (str): Unique job identifier
 
-    Returns: JSON Flask response containing the result counter data,
-             or status/error messages if job is not ready or invalid.
+    Returns: JSON response with injury statistics, job status, or error message.
     """
     logging.debug(f"Fetching analysis result for job {jobid}")
+
     try:
+        # Check if result is already cached
         result = results_db.get(jobid)
         if result:
             logging.info(f"Returning cached result for job {jobid}")
             return jsonify(json.loads(result)), 200
 
+        # Get job metadata from DB 2
         job_data = jdb.hgetall(jobid)
         if not job_data:
             logging.warning(f"Job ID {jobid} not found.")
             return jsonify({"error": "Job ID not found"}), 404
 
+        # Check job status
         status = job_data.get("status", "unknown")
         if status != "complete":
             return jsonify({
@@ -371,6 +374,7 @@ def get_play_structure_types(jobid: str):
                 "status": status
             }), 202
 
+        # Parse and validate dates
         start_date_str = job_data.get("start_date")
         end_date_str = job_data.get("end_date")
         if not start_date_str or not end_date_str:
@@ -382,23 +386,31 @@ def get_play_structure_types(jobid: str):
         except ValueError:
             return jsonify({"error": "Invalid date format. Use YYYY-MM-DD."}), 400
 
+        # Load play-by-play data from DB 0
         raw_data = rd.get("hgnc_data")
         if not raw_data:
-            return jsonify({"error": "No NFL data found in Redis."}), 500
+            logging.error("No NFL data found in Redis (DB 0).")
+            return jsonify({"error": "No NFL data available"}), 500
 
-        play_list = json.loads(raw_data)
+        try:
+            play_list = json.loads(raw_data)
+            if not isinstance(play_list, list):
+                raise TypeError("Expected a list of play records.")
+        except Exception as parse_err:
+            logging.error(f"Failed to parse hgnc_data: {parse_err}")
+            return jsonify({"error": "Invalid format for NFL data in Redis."}), 500
 
-        # Filter plays within date range and that mention 'injured'
+        # Filter plays by date and "injured" keyword
         filtered_plays = []
         for play in play_list:
             try:
                 play_date = datetime.strptime(play.get("GameDate", "1900-01-01"), "%Y-%m-%d")
                 if start_date <= play_date <= end_date and "injured" in play.get("Description", "").lower():
                     filtered_plays.append(play)
-            except ValueError:
-                continue
+            except Exception:
+                continue  # Skip malformed dates
 
-        # Separate counters for rush and pass
+        # Aggregate injuries
         rush_counts = {}
         pass_counts = {}
         total_rush = 0
@@ -410,13 +422,13 @@ def get_play_structure_types(jobid: str):
 
             if play_type == "rush":
                 rush_dir = play.get("RushDirection", "Unknown")
-                combo = f"{formation} - {rush_dir}"
-                rush_counts[combo] = rush_counts.get(combo, 0) + 1
+                key = f"{formation} - {rush_dir}"
+                rush_counts[key] = rush_counts.get(key, 0) + 1
                 total_rush += 1
             elif play_type == "pass":
                 pass_type = play.get("PassType", "Unknown")
-                combo = f"{formation} - {pass_type}"
-                pass_counts[combo] = pass_counts.get(combo, 0) + 1
+                key = f"{formation} - {pass_type}"
+                pass_counts[key] = pass_counts.get(key, 0) + 1
                 total_pass += 1
 
         rush_percentages = {
@@ -429,6 +441,7 @@ def get_play_structure_types(jobid: str):
             for combo, count in pass_counts.items()
         }
 
+        # Final result object
         output = {
             "job_id": jobid,
             "start_date": start_date_str,
@@ -439,6 +452,7 @@ def get_play_structure_types(jobid: str):
             "injury_percentage_by_pass_combo": pass_percentages
         }
 
+        # Cache result
         results_db.set(jobid, json.dumps(output))
         logging.info(f"Generated result for job {jobid}: {total_rush + total_pass} injuries counted.")
         return jsonify(output), 200
@@ -446,7 +460,6 @@ def get_play_structure_types(jobid: str):
     except Exception as e:
         logging.error(f"Unexpected error in get_play_structure_types({jobid}): {str(e)}")
         return jsonify({"error": f"Unexpected error: {str(e)}"}), 500
-
 
 
 if __name__ == "__main__":
