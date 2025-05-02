@@ -30,8 +30,8 @@ def run_worker_job_logic(job_id: str) -> None:
 
         update_job_status(job_id, "in progress")
 
-        start_date_str = job.get("start_date")
-        end_date_str = job.get("end_date")
+        start_date_str = job.get("start")
+        end_date_str = job.get("end")
 
         try:
             start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
@@ -48,36 +48,65 @@ def run_worker_job_logic(job_id: str) -> None:
             return
 
         play_list = json.loads(raw_data)
+        filtered = [p for p in play_list if "injured" in p.get("Description", "").lower()]
 
-        # Filter: plays that mention "injured" within date range
-        filtered_plays = []
+        rush_counts, pass_counts = {}, {}
+        rush_total_all, pass_total_all = {}, {}
+
         for play in play_list:
+            formation = play.get("Formation", "Unknown")
+            play_type = play.get("PlayType", "").lower()
+            if play_type == "rush":
+                rush_dir = play.get("RushDirection", "Unknown")
+                combo = f"{formation} - {rush_dir}"
+                rush_total_all[combo] = rush_total_all.get(combo, 0) + 1
+            elif play_type == "pass":
+                pass_type = play.get("PassType", "Unknown")
+                combo = f"{formation} - {pass_type}"
+                pass_total_all[combo] = pass_total_all.get(combo, 0) + 1
+
+        for play in filtered:
             try:
                 play_date = datetime.strptime(play.get("GameDate", "1900-01-01"), "%Y-%m-%d")
-                if start_date <= play_date <= end_date and "injured" in play.get("Description", "").lower():
-                    filtered_plays.append(play)
-            except Exception:
-                continue  # Skip bad dates
+                if not (start_date <= play_date <= end_date):
+                    continue
 
-        # Count injuries by (Formation, PlayType)
-        combo_counts = {}
-        for play in filtered_plays:
-            formation = play.get("Formation", "Unknown")
-            play_type = play.get("PlayType", "Unknown")
-            combo = f"{formation} - {play_type}"
-            combo_counts[combo] = combo_counts.get(combo, 0) + 1
+                formation = play.get("Formation", "Unknown")
+                play_type = play.get("PlayType", "").lower()
+
+                if play_type == "rush":
+                    rush_dir = play.get("RushDirection", "Unknown")
+                    combo = f"{formation} - {rush_dir}"
+                    rush_counts[combo] = rush_counts.get(combo, 0) + 1
+
+                elif play_type == "pass":
+                    pass_type = play.get("PassType", "Unknown")
+                    combo = f"{formation} - {pass_type}"
+                    pass_counts[combo] = pass_counts.get(combo, 0) + 1
+            except Exception:
+                continue
+
+        rush_percent = {
+            k: (rush_counts.get(k, 0) / v * 100) if v else 0
+            for k, v in rush_total_all.items()
+        }
+
+        pass_percent = {
+            k: (pass_counts.get(k, 0) / v * 100) if v else 0
+            for k, v in pass_total_all.items()
+        }
 
         result = {
             "job_id": job_id,
             "start_date": start_date_str,
             "end_date": end_date_str,
-            "total_injured_plays": len(filtered_plays),
-            "injured_playtype_formation_counts": combo_counts
+            "rush_injury_percentages": rush_percent,
+            "pass_injury_percentages": pass_percent
         }
 
         results_db.set(job_id, json.dumps(result))
         update_job_status(job_id, "complete")
-        logging.info(f"Job {job_id} completed. Injured plays: {len(filtered_plays)}.")
+        logging.info(f"Job {job_id} completed and result saved.")
 
     except Exception as e:
         logging.error(f"Error processing job {job_id}: {e}")
