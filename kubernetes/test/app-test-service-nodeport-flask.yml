@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: flask-app-nodeport-service
-  namespace: prod
+  namespace: vbetala6276
 spec:
   selector:
     app: flask-app
@@ -10,5 +10,4 @@ spec:
     - protocol: TCP
       port: 80
       targetPort: 5000
-      nodePort: 30007
   type: NodePort

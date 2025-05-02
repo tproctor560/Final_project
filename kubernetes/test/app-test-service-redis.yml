@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: redis-db
-  namespace: prod
+  namespace: vbetala6276
 spec:
   selector:
     app: redis

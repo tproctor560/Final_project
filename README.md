@@ -116,6 +116,9 @@ The line ```app = Flask(__name__)``` allows the file to turn into a Flask API se
 
 /data can be replaced with any of the endpoints given below depending on the desired function   
 
+## Running with Kubernetes containers locally
+To run this project with Kubernetes containers locally, you should first cd into the kubernetes directory and then run ```kubectl apply -f test/```, and then run a port forward command like: ```kubectl port-forward service/flask-service 8080:80```. Then to test whether the app is running, try ```curl -X GET "http://127.0.0.1:8080/help"```. Keep in mind that for the next set of commands, you need to replace the port ```5000``` with the port ```8000```.
+
 ### Parameters
 
 To make these queue based job requests it is important that the user provides specific parameters to conduct analysis over datapoints to their specifications. For this dataset, that means giving a range of gene approval dates that the user would like to analyze the results of.
@@ -151,45 +154,102 @@ This will include:
 
     example code snippet output:  
     ```json
-    {
-      "agr": "HGNC:54219",
-      "date_approved_reserved": "2019-04-09",
-      "date_modified": "2019-04-09",
-      "ensembl_gene_id": "ENSG00000246523",
-      "entrez_id": "100506368",
-      "gene_group": [
-        "Divergent transcripts"
-      ]
-    }
+     {
+    "Challenger": NaN,
+    "DefenseTeam": "CLE",
+    "Description": "TIMEOUT #1 BY PIT AT 03:03.",
+    "Down": 0,
+    "Formation": "UNDER CENTER",
+    "GameDate": "2024-12-08",
+    "GameId": 2024120804,
+    "IsChallenge": 0,
+    "IsChallengeReversed": 0,
+    "IsFumble": 0,
+    "IsIncomplete": 0,
+    "IsInterception": 0,
+    "IsMeasurement": 0,
+    "IsNoPlay": 0,
+    "IsPass": 0,
+    "IsPenalty": 0,
+    "IsPenaltyAccepted": 0,
+    "IsRush": 0,
+    "IsSack": 0,
+    "IsTouchdown": 0,
+    "IsTwoPointConversion": 0,
+    "IsTwoPointConversionSuccessful": 0,
+    "Minute": 3,
+    "NextScore": 0,
+    "OffenseTeam": "PIT",
+    "PassType": "Unknown",
+    "PenaltyTeam": NaN,
+    "PenaltyType": NaN,
+    "PenaltyYards": 0,
+    "PlayType": "TIMEOUT",
+    "Quarter": 4,
+    "RushDirection": "Unknown",
+    "SeasonYear": 2024,
+    "Second": 3,
+    "SeriesFirstDown": 1,
+    "TeamWin": 0,
+    "ToGo": 0,
+    "YardLine": 0,
+    "YardLineDirection": "OPP",
+    "YardLineFixed": 100,
+    "Yards": 0,
+    "play_id": 2258
+  },
     ```
 
 - ```curl -X DELETE "http://127.0.0.1:5000/plays"``` - this will output nothing, and the redis database will be cleared of data by deleting it   
 
-- ```curl -X GET "http://127.0.0.1:5000/genes"``` - this will output all the HGNC gene id's within the dataset
+- ```curl -X GET "http://127.0.0.1:5000/plays/2257"``` - this will output description and other information regarding a specific HGNC gene id
 
     example code snippet output:  
     ```json
-    {
-      "HGNC:3443",
-      "HGNC:3444",
-      "HGNC:26727",
-      "HGNC:53894"
-    }
-    ```
-
-- ```curl -X GET "http://127.0.0.1:5000/genes/53894"``` - this will output description and other information regarding a specific HGNC gene id
-
-    example code snippet output:  
-    ```json
-    {
-      "agr": "HGNC:53894",
-      "alias_symbol": [
-        "erfl1"
-      ],
-      "ccds_id": [
-        "CCDS92627"
-      ]
-    }
+  {
+    "Challenger": NaN,
+    "DefenseTeam": "ARI",
+    "Description": "(5:46) (SHOTGUN) 26-Z.CHARBONNET UP THE MIDDLE TO ARI 49 FOR NO GAIN (43-J.LUKETA).",
+    "Down": 1,
+    "Formation": "SHOTGUN",
+    "GameDate": "2024-12-08",
+    "GameId": 2024120807,
+    "IsChallenge": 0,
+    "IsChallengeReversed": 0,
+    "IsFumble": 0,
+    "IsIncomplete": 0,
+    "IsInterception": 0,
+    "IsMeasurement": 0,
+    "IsNoPlay": 0,
+    "IsPass": 0,
+    "IsPenalty": 0,
+    "IsPenaltyAccepted": 0,
+    "IsRush": 1,
+    "IsSack": 0,
+    "IsTouchdown": 0,
+    "IsTwoPointConversion": 0,
+    "IsTwoPointConversionSuccessful": 0,
+    "Minute": 5,
+    "NextScore": 0,
+    "OffenseTeam": "SEA",
+    "PassType": "Unknown",
+    "PenaltyTeam": NaN,
+    "PenaltyType": NaN,
+    "PenaltyYards": 0,
+    "PlayType": "RUSH",
+    "Quarter": 4,
+    "RushDirection": "CENTER",
+    "SeasonYear": 2024,
+    "Second": 46,
+    "SeriesFirstDown": 0,
+    "TeamWin": 0,
+    "ToGo": 10,
+    "YardLine": 49,
+    "YardLineDirection": "OPP",
+    "YardLineFixed": 51,
+    "Yards": 0,
+    "play_id": 2257
+  }
     ```
 
 - ```curl -X POST http://127.0.0.1:5000/jobs \ -H "Content-Type: application/json" \ -d '{"start_date": "2024-06-23", "end_date": "2025-01-10"}'``` - this will create a job submission request within a given list of specified gene approval dates that the user submits. It is important to know that if the jobs request is missing data, it will default to the range of the dataset. Therefore the following is a correct request as well ```curl -X POST http://127.0.0.1:5000/jobs \ -H "Content-Type: application/json" \ -d '{}'``` - This functionality is different than what we have studies in class, but it makes sense for a dataset like this.
@@ -231,26 +291,8 @@ This will include:
     {
   "end_date": "2020-01-01",
   "job_id": "7da3281d-d106-43e2-a54f-de68ebe3b5a7",
-  "locus_type_counts": {
-    "RNA, cluster": 114,
-    "RNA, long non-coding": 4146,
-    "RNA, micro": 1707,
-    "RNA, misc": 27,
-    "RNA, ribosomal": 58,
-    "RNA, small nuclear": 34,
-    "RNA, small nucleolar": 484,
-    "RNA, transfer": 533,
-    "RNA, vault": 1,
-    "T cell receptor pseudogene": 1,
-    "complex locus constituent": 1,
-    "endogenous retrovirus": 103,
-    "gene with protein product": 4718,
-    "immunoglobulin gene": 5,
-    "immunoglobulin pseudogene": 8,
-    "pseudogene": 11176,
-    "readthrough": 132,
-    "region": 1,
-    "unknown": 22
+  "injury_combo_counts": {
+      ["Some injury data"]
   },
   "start_date": "2005-01-01",
   "total_genes_counted": 23271
