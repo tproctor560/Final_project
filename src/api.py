@@ -74,10 +74,21 @@ def pull_data():
         df['play_id'] = range(1, len(df) + 1)  # Sequential play_id (1-based index)
 
         # Convert the DataFrame to a list of dictionaries
-        selected_columns = ['play_id', "GameId", "GameDate", "Quarter", "Minute", "Second", "OffenseTeam", "DefenseTeam",     "Down", "ToGo", "YardLine", "SeriesFirstDown", "NextScore", "Description", "TeamWin",     "SeasonYear", "Yards", "Formation", "PlayType", "IsRush", "IsPass", "IsIncomplete",     "IsTouchdown", "PassType", "IsSack", "IsChallenge", "IsChallengeReversed", "Challenger",     "IsMeasurement", "IsInterception", "IsFumble", "IsPenalty", "IsTwoPointConversion",     "IsTwoPointConversionSuccessful", "RushDirection", "YardLineFixed", "YardLineDirection",     "IsPenaltyAccepted", "PenaltyTeam", "IsNoPlay", "PenaltyType", "PenaltyYards" ] data = df[selected_columns].to_dict(orient='records')
+        selected_columns = [
+            'play_id', "GameId", "GameDate", "Quarter", "Minute", "Second", "OffenseTeam", "DefenseTeam",
+            "Down", "ToGo", "YardLine", "SeriesFirstDown", "NextScore", "Description", "TeamWin",
+            "SeasonYear", "Yards", "Formation", "PlayType", "IsRush", "IsPass", "IsIncomplete",
+            "IsTouchdown", "PassType", "IsSack", "IsChallenge", "IsChallengeReversed", "Challenger",
+            "IsMeasurement", "IsInterception", "IsFumble", "IsPenalty", "IsTwoPointConversion",
+            "IsTwoPointConversionSuccessful", "RushDirection", "YardLineFixed", "YardLineDirection",
+            "IsPenaltyAccepted", "PenaltyTeam", "IsNoPlay", "PenaltyType", "PenaltyYards"
+        ]
+
+        data = df[selected_columns].to_dict(orient='records')
 
         # Store the data in Redis
         rd.set("nfl_data", json.dumps(data))  # Store using a string key
+
 
         logging.info("NFL play-by-play data successfully fetched and stored in Redis.")
         return jsonify({"message": "NFL play-by-play data loaded successfully"}), 201
