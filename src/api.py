@@ -67,8 +67,23 @@ def load_and_return():
     except Exception as e:
         return jsonify({"error": f"Failed to load and return data: {str(e)}"}), 500
 
-@app.route('help', methods = ['???']) wihc is a /help endpoint describing all the routes within
-
+@app.route('/help', methods=['GET'])
+def help():
+    return jsonify({
+        "routes": {
+            "/plays/load": "POST - Load full play data into Redis and return it",
+            "/data": "POST/GET/DELETE - Load, view, or delete basic play data subset",
+            "/plays": "GET - Get all plays",
+            "/plays/<play_id>": "GET - Get formation/playtype/description by ID",
+            "/plays/rush": "GET - Get all rush plays",
+            "/plays/pass": "GET - Get all pass plays",
+            "/jobs": "POST - Submit a job for analysis",
+            "/jobs": "GET - List all job IDs",
+            "/jobs/<jobid>": "GET - Get job status",
+            "/results/<jobid>": "GET - Return result of injury analysis",
+            "/help": "GET - Describe all routes"
+        }
+    }), 200
 
 @app.route('/data', methods = ['POST'])
 def pull_data():
