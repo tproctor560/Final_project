@@ -145,7 +145,7 @@ def return_data():
     return jsonify({"error": "No NFL play-by-play data available"}), 500
 
 
-@app.route('data', methods=['DELETE'])
+@app.route('/data', methods=['DELETE'])
 def delete():
     """
     Deletes the cached NFL play-by-play data from Redis.
