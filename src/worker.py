@@ -61,11 +61,16 @@ def run_worker_job_logic(job_id: str) -> None:
                 key = f"Formation: {formation}; PlayType: {play_type}; Direction: {direction}"
 
                 if key not in injury_combo_counts:
-                    injury_combo_counts[key] = {"injury_plays": 0, "total_plays": 0}
+                    injury_combo_counts[key] = {"injury_plays": 0, "total_plays": 0, "injury_percentage": 0.0}
 
                 injury_combo_counts[key]["total_plays"] += 1
                 if "injured" in description.lower():
                     injury_combo_counts[key]["injury_plays"] += 1
+
+                # Calculate injury percentage
+                total = injury_combo_counts[key]["total_plays"]
+                injuries = injury_combo_counts[key]["injury_plays"]
+                injury_combo_counts[key]["injury_percentage"] = round((injuries / total) * 100, 2) if total > 0 else 0.0
 
 
             except Exception:
