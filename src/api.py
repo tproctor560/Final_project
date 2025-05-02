@@ -42,7 +42,7 @@ def load_and_return():
         df['RushDirection'] = df['RushDirection'].fillna('Unknown')
         df['PassType'] = df['PassType'].fillna('Unknown')
         if not pd.api.types.is_datetime64_any_dtype(df['GameDate']):
-            df['GameDate'] = pd.to_datetime(df['GameDate'])
+            df['GameDate'] = df['GameDate'].dt.strftime('%Y-%m-%d')
 
         df['play_id'] = range(1, len(df) + 1)
 
