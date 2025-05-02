@@ -9,7 +9,7 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
 spec:
   rules:
-  - host: flask-app.example.com
+  - host: localhost
     http:
       paths:
       - path: /
@@ -21,5 +21,5 @@ spec:
               number: 80
   tls:
   - hosts:
-    - flask-app.example.com
+    - localhost
     secretName: flask-app-tls
