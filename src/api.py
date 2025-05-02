@@ -366,9 +366,11 @@ def get_injury_rates(jobid: str):
             return jsonify(json.loads(cached)), 200
 
         # Get job metadata
-        job_data = jdb.hgetall(jobid)
-        if not job_data:
-            return jsonify({"error": "Job ID not found"}), 404
+        job_data_raw = jdb.get(jobid) 
+        if not job_data_raw:     
+            return jsonify({"error": "Job ID not found"}), 404 
+        job_data = json.loads(job_data_raw)
+
 
         if job_data.get("status") != "complete":
             return jsonify({
