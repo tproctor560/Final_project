@@ -30,8 +30,8 @@ def run_worker_job_logic(job_id: str) -> None:
 
         update_job_status(job_id, "in progress")
 
-        start_date_str = job.get("start")
-        end_date_str = job.get("end")
+        start_date_str = job.get("start_date")
+        end_date_str = job.get("end_date")
 
         try:
             start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
@@ -41,7 +41,7 @@ def run_worker_job_logic(job_id: str) -> None:
             update_job_status(job_id, "failed")
             return
 
-        raw_data = rd.get("hgnc_data")
+        raw_data = rd.get("nfl_data")
         if not raw_data:
             logging.error("No NFL data found in Redis.")
             update_job_status(job_id, "failed")
