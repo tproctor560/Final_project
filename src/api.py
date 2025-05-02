@@ -23,26 +23,19 @@ def get_redis_client() -> redis.Redis:
 rd = get_redis_client()
 CSV_FILE_PATH = os.path.join(os.path.dirname(__file__), 'data', 'pbp-2024.csv')
 
-@app.route("/data", methods=["POST"])
-def load_data():
+@app.route('/plays/load', methods=['POST'])
+def load_and_return():
     """
-    Loads NFL play-by-play data from a CSV file into Redis.
+    Loads data from CSV into Redis and returns the data immediately.
     """
-    logging.debug("Loading NFL play-by-play data received.")
     try:
         # Load CSV data into a pandas DataFrame
         df = pd.read_csv(CSV_FILE_PATH)
 
-        # Print out the column names for debugging purposes
-        logging.debug(f"CSV Columns: {df.columns.tolist()}")
-
-        # Check if the CSV contains the necessary columns
         required_columns = ['Formation', 'PlayType', 'Description', 'RushDirection', 'PassType']
         if not all(col in df.columns for col in required_columns):
-            logging.error(f"CSV file is missing required columns. Found columns: {df.columns}")
             return jsonify({"error": "CSV file is missing required columns"}), 400
 
-        # Handle missing or invalid data
         df['Formation'] = df['Formation'].fillna('Unknown')
         df['PlayType'] = df['PlayType'].fillna('Unknown')
         df['Description'] = df['Description'].fillna('No description')
@@ -51,10 +44,8 @@ def load_data():
         if not pd.api.types.is_datetime64_any_dtype(df['GameDate']):
             df['GameDate'] = pd.to_datetime(df['GameDate'])
 
-        # Add unique play_id
         df['play_id'] = range(1, len(df) + 1)
 
-        # Select relevant columns
         selected_columns = [
             'play_id', 'GameId', 'GameDate', 'Quarter', 'Minute', 'Second', 'OffenseTeam', 'DefenseTeam',
             'Down', 'ToGo', 'YardLine', 'SeriesFirstDown', 'NextScore', 'Description', 'TeamWin',
@@ -66,36 +57,13 @@ def load_data():
         ]
 
         data = df[selected_columns].to_dict(orient='records')
-
-        # Store data in Redis
         rd.set("hgnc_data", json.dumps(data))
 
-        logging.info("NFL play-by-play data successfully loaded into Redis.")
-        return jsonify({"message": "NFL play-by-play data loaded successfully"}), 201
+        return jsonify(data), 201
 
     except Exception as e:
-        logging.error(f"Error loading data from CSV: {str(e)}")
-        return jsonify({"error": f"Error loading data from CSV: {str(e)}"}), 500
+        return jsonify({"error": f"Failed to load and return data: {str(e)}"}), 500
 
-@app.route("/plays", methods=["GET"])
-def get_plays():
-    """
-    Returns all NFL play-by-play data from Redis.
-    """
-    try:
-        data = rd.get("hgnc_data")
-        if not data:
-            return jsonify({"error": "No data found in Redis. Please load data first."}), 404
-
-        plays = json.loads(data)
-        return jsonify(plays), 200
-
-    except Exception as e:
-        logging.error(f"Error retrieving plays from Redis: {str(e)}")
-        return jsonify({"error": "Failed to fetch plays"}), 500
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
 
 
 
