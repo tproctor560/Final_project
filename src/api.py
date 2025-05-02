@@ -154,7 +154,7 @@ def load_plays():
         ]
 
         data = df[selected_columns].to_dict(orient='records')
-        rd.set("hgnc_data", json.dumps(data))
+        rd.set("nfl_data", json.dumps(data))
 
         return jsonify(data), 201
 
@@ -170,7 +170,7 @@ def get_play_structure(play_id):
     Also includes rush direction or pass type if applicable.
     """
     logging.debug(f"Request to retrieve play with play_id: {play_id}")
-    cached_data = rd.get("hgnc_data")
+    cached_data = rd.get("nfl_data")
     
     if not cached_data:
         return jsonify({"error": "No play structure data available"}), 500
@@ -206,7 +206,7 @@ def pass_pull():
     """
     try:
         logging.debug(f"Request to retrieve play structure for passes received.")
-        cached_data = rd.get("hgnc_data")
+        cached_data = rd.get("nfl_data")
         if cached_data:
             logging.info("Data retrieved from Redis cache.")
             data = json.loads(cached_data)
@@ -231,7 +231,7 @@ def rush_pull():
     """
     try:
         logging.debug(f"Request to retrieve play structure for rush received.")
-        cached_data = rd.get("hgnc_data")
+        cached_data = rd.get("nfl_data")
         if cached_data:
             logging.info("Data retrieved from Redis cache.")
             data = json.loads(cached_data)
@@ -255,7 +255,7 @@ def create_job():
         data = request.get_json()
 
         # Load and parse Redis data
-        cached_data = json.loads(rd.get("hgnc_data"))
+        cached_data = json.loads(rd.get("nfl_data"))
         df = pd.DataFrame(cached_data)
         oldest_date = df['GameDate'].min()
         newest_date = df['GameDate'].max()
@@ -387,7 +387,7 @@ def get_play_structure_types(jobid: str):
             return jsonify({"error": "Invalid date format. Use YYYY-MM-DD."}), 400
 
         # Load play-by-play data from DB 0
-        raw_data = rd.get("hgnc_data")
+        raw_data = rd.get("nfl_data")
         if not raw_data:
             logging.error("No NFL data found in Redis (DB 0).")
             return jsonify({"error": "No NFL data available"}), 500
@@ -397,7 +397,7 @@ def get_play_structure_types(jobid: str):
             if not isinstance(play_list, list):
                 raise TypeError("Expected a list of play records.")
         except Exception as parse_err:
-            logging.error(f"Failed to parse hgnc_data: {parse_err}")
+            logging.error(f"Failed to parse nfl_data: {parse_err}")
             return jsonify({"error": "Invalid format for NFL data in Redis."}), 500
 
         # Filter plays by date and "injured" keyword
