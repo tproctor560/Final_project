@@ -43,3 +43,4 @@ services:
     working_dir: /code/src
     command: python worker.py
     restart: always
+
