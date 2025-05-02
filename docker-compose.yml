@@ -7,7 +7,7 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - ./data:/code/data  # Correct volume mapping
+      - ./data:/code/data
     user: "1000:1000"
     command: ["--save", ""]
     restart: always
@@ -28,9 +28,11 @@ services:
     volumes:
       - ./src:/code/src
       - ./test:/code/test
-      - ./data:/code/data  # Make sure the Flask app can access the data folder too
+      - ./data:/code/data
+    working_dir: /code/src
+    command: python api.py
     restart: always
-  
+
   worker:
     build: .
     depends_on:
@@ -38,4 +40,6 @@ services:
     container_name: worker
     volumes:
       - ./src:/code/src
+    working_dir: /code/src
+    command: python worker.py
     restart: always
