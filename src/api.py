@@ -353,25 +353,18 @@ def get_job(jobid: str):
 
 @app.route('/results/<jobid>', methods=['GET'])
 def get_injury_rates(jobid: str):
-    """
-    Returns injury rates for each (formation + direction/type) combo
-    for rush and pass plays if the job is complete.
-    """
     logging.debug(f"Fetching analysis result for job {jobid}")
-
     try:
-        # Check if result already cached
         if results_db.type(jobid) == "string":
             cached = results_db.get(jobid)
             logging.info(f"Returning cached result for job {jobid}")
             return jsonify(json.loads(cached)), 200
 
         # Get job metadata
-        job_data_raw = jdb.get(jobid) 
-        if not job_data_raw:     
-            return jsonify({"error": "Job ID not found"}), 404 
+        job_data_raw = jdb.get(jobid)
+        if not job_data_raw:
+            return jsonify({"error": "Job ID not found"}), 404
         job_data = json.loads(job_data_raw)
-
 
         if job_data.get("status") != "complete":
             return jsonify({
@@ -379,8 +372,8 @@ def get_injury_rates(jobid: str):
                 "status": job_data.get("status", "unknown")
             }), 202
 
-        start_date = datetime.strptime(job_data.get("start_date"), "%Y-%m-%d")
-        end_date = datetime.strptime(job_data.get("end_date"), "%Y-%m-%d")
+        start_date = datetime.strptime(job_data["start"], "%Y-%m-%d")
+        end_date = datetime.strptime(job_data["end"], "%Y-%m-%d")
 
         raw_data = rd.get("nfl_data")
         if not raw_data:
@@ -389,23 +382,22 @@ def get_injury_rates(jobid: str):
         play_list = json.loads(raw_data)
         filtered = [p for p in play_list if "injured" in p.get("Description", "").lower()]
 
-        rush_total, pass_total = 0, 0
-        rush_counts, pass_counts = {}, {}
         rush_total_all, pass_total_all = {}, {}
+        rush_injuries, pass_injuries = {}, {}
 
         for play in play_list:
-            formation = play.get("Formation", "Unknown")
             play_type = play.get("PlayType", "").lower()
-            combo = None
+            formation = play.get("Formation", "Unknown")
 
             if play_type == "rush":
-                rush_dir = play.get("RushDirection", "Unknown")
-                combo = f"{formation} - {rush_dir}"
-                rush_total_all[combo] = rush_total_all.get(combo, 0) + 1
+                direction = play.get("RushDirection", "Unknown")
+                key = f"{formation};Rush;{direction}"
+                rush_total_all[key] = rush_total_all.get(key, 0) + 1
+
             elif play_type == "pass":
-                pass_type = play.get("PassType", "Unknown")
-                combo = f"{formation} - {pass_type}"
-                pass_total_all[combo] = pass_total_all.get(combo, 0) + 1
+                direction = play.get("PassType", "Unknown")
+                key = f"{formation};Pass;{direction}"
+                pass_total_all[key] = pass_total_all.get(key, 0) + 1
 
         for play in filtered:
             try:
@@ -413,40 +405,37 @@ def get_injury_rates(jobid: str):
                 if not (start_date <= date <= end_date):
                     continue
 
-                formation = play.get("Formation", "Unknown")
                 play_type = play.get("PlayType", "").lower()
+                formation = play.get("Formation", "Unknown")
 
                 if play_type == "rush":
-                    rush_dir = play.get("RushDirection", "Unknown")
-                    combo = f"{formation} - {rush_dir}"
-                    rush_counts[combo] = rush_counts.get(combo, 0) + 1
-                    rush_total += 1
+                    direction = play.get("RushDirection", "Unknown")
+                    key = f"{formation};Rush;{direction}"
+                    rush_injuries[key] = rush_injuries.get(key, 0) + 1
 
                 elif play_type == "pass":
-                    pass_type = play.get("PassType", "Unknown")
-                    combo = f"{formation} - {pass_type}"
-                    pass_counts[combo] = pass_counts.get(combo, 0) + 1
-                    pass_total += 1
-
+                    direction = play.get("PassType", "Unknown")
+                    key = f"{formation};Pass;{direction}"
+                    pass_injuries[key] = pass_injuries.get(key, 0) + 1
             except Exception:
                 continue
 
-        rush_percent = {
-            k: (rush_counts.get(k, 0) / v * 100) if v else 0
-            for k, v in rush_total_all.items()
-        }
+        rush_output = [
+            f"Formation: {k.split(';')[0]}; PlayType: {k.split(';')[1]}; Direction: {k.split(';')[2]} -> {rush_injuries.get(k, 0)} injury plays, {rush_total_all[k]} total plays"
+            for k in rush_total_all
+        ]
 
-        pass_percent = {
-            k: (pass_counts.get(k, 0) / v * 100) if v else 0
-            for k, v in pass_total_all.items()
-        }
+        pass_output = [
+            f"Formation: {k.split(';')[0]}; PlayType: {k.split(';')[1]}; Direction: {k.split(';')[2]} -> {pass_injuries.get(k, 0)} injury plays, {pass_total_all[k]} total plays"
+            for k in pass_total_all
+        ]
 
         result = {
             "job_id": jobid,
-            "start_date": job_data["start_date"],
-            "end_date": job_data["end_date"],
-            "rush_injury_percentages": rush_percent,
-            "pass_injury_percentages": pass_percent
+            "start_date": job_data["start"],
+            "end_date": job_data["end"],
+            "rush_results": rush_output,
+            "pass_results": pass_output
         }
 
         results_db.set(jobid, json.dumps(result))
@@ -456,9 +445,6 @@ def get_injury_rates(jobid: str):
         logging.error(f"Unexpected error in get_injury_rates({jobid}): {e}")
         return jsonify({"error": f"Unexpected error: {e}"}), 500
 
-    except Exception as e:
-        logging.error(f"Unexpected error in get_injury_rates({jobid}): {e}")
-        return jsonify({"error": f"Unexpected error: {e}"}), 500
 
 if __name__ == "__main__":
     app.run(debug=True, host='0.0.0.0')
