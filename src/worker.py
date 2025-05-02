@@ -64,8 +64,9 @@ def run_worker_job_logic(job_id: str) -> None:
                     injury_combo_counts[key] = {"injury_plays": 0, "total_plays": 0}
 
                 injury_combo_counts[key]["total_plays"] += 1
-                if "injured" in description:
+                if "injured" in description.lower():
                     injury_combo_counts[key]["injury_plays"] += 1
+
 
             except Exception:
                 continue  # Skip malformed records
