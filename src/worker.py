@@ -5,6 +5,7 @@ import os
 import logging
 import re
 import pandas as pd
+import numpy as np
 from hotqueue import HotQueue
 from datetime import datetime
 from jobs import get_job_by_id, update_job_status
@@ -67,24 +68,67 @@ def run_worker_job_logic(job_id: str) -> None:
         if method.startswith("plays/"):
             if method != "plays/":
                 playID = method.split("/")[1]
-                try:
-                    logging.info(f"Request recieved for certain playID {playID}")
-                    specific_play = list_of_plays[list_of_plays["play_id"] == playID].copy()
-                    result = {
-                        "job_id": job_id,
-                        "start_date": start_date_str,
-                        "end_date": end_date_str,
-                        results: {
-                            "specific play": specific_play.to_json(orient='records', lines=True),
+                if playID == "pass":
+                    try:
+                        
+                        pass_plays = list_of_plays[list_of_plays['PlayType'] == "PASS"].copy()
+                        pass_results = compute_statistics(pass_plays)
+                        result = {
+                            "job_id": job_id,
+                            "start_date": start_date_str,
+                            "end_date": end_date_str,
+                            results: {
+                                "pass plays": pass_results,
+                            }
                         }
-                    }
-                    
-                    results_db.set(job_id, json.dumps(result))
-                    logging.info(f"Result saved for job {job_id}")
-                    update_job_status(job_id, "complete")
-                    logging.info(f"Job {job_id} marked as complete.")
-                except Exception as e:
-                    logging.warning(f"Error: {playID} returns error")
+                        
+                        results_db.set(job_id, json.dumps(result))
+                        logging.info(f"Result saved for job {job_id}")
+                        update_job_status(job_id, "complete")
+                        logging.info(f"Job {job_id} marked as complete.")
+                        
+                    except Exception as e:
+                        logging.warning(f"Error: {playID} returns error: {e}")
+                        
+                if playID == "rush":
+                    try:
+                        rush_plays = list_of_plays[list_of_plays['PlayType'] == "RUSH"].copy()
+                        rush_results = compute_statistics(rush_plays)
+                        result = {
+                            "job_id": job_id,
+                            "start_date": start_date_str,
+                            "end_date": end_date_str,
+                            results: {
+                                "rush plays": rush_results,
+                            }
+                        }
+                        
+                        results_db.set(job_id, json.dumps(result))
+                        logging.info(f"Result saved for job {job_id}")
+                        update_job_status(job_id, "complete")
+                        logging.info(f"Job {job_id} marked as complete.")
+                        
+                    except Exception as e:
+                        logging.warning(f"Error: {playID} returns error: {e}")
+                else:       
+                    try:
+                        logging.info(f"Request recieved for certain playID {playID}")
+                        specific_play = list_of_plays[list_of_plays["play_id"] == playID].copy()
+                        result = {
+                            "job_id": job_id,
+                            "start_date": start_date_str,
+                            "end_date": end_date_str,
+                            results: {
+                                "specific play": specific_play.to_json(orient='records', lines=True),
+                            }
+                        }
+                        
+                        results_db.set(job_id, json.dumps(result))
+                        logging.info(f"Result saved for job {job_id}")
+                        update_job_status(job_id, "complete")
+                        logging.info(f"Job {job_id} marked as complete.")
+                    except Exception as e:
+                        logging.warning(f"Error: {playID} returns error")
             if method == "plays/":
                 try:
                     stat_results = compute_statistics(list_of_plays)
@@ -101,7 +145,11 @@ def run_worker_job_logic(job_id: str) -> None:
                     update_job_status(job_id, "complete")
                     logging.info(f"Job {job_id} marked as complete.")
                     
-        #TODO: Add functionality for injuries
+        if method.startswith("injuries/"):
+            if method == "injuries/":
+                df_injuries = find_injuries_from_list(list_of_plays)
+                if df_injuries != False:
+                    
 
     except Exception as e:
         logging.error(f"Exception while processing job {job_id}: {str(e)}")
@@ -145,7 +193,7 @@ def find_injuries_from_list(list_of_plays):
         
     except Exception as e:
         logging.warning("Error while processing data for injuries")
-        return False, False
+        return False
     
 def compute_statistics(list_of_plays, injuries=False):
     #TODO: write function description, written by Claude 3.7, with the prompt: Write a function that takes in the df head at the top and computes statistics about injuries, for example how many passes or rushes ended in injuries?
@@ -259,7 +307,221 @@ def compute_statistics(list_of_plays, injuries=False):
     
     return results
 
+def compute_injury_statistics(injury_df, total_df=None):
+    # written by claude with 
+    # Initialize statistics dictionary
+    stats = {}
     
+    # Basic counts
+    stats['total_injuries'] = len(injury_df)
+    
+    # #### Rush vs Pass analysis ####
+    rush_pass_stats = {}
+    
+    # Rush plays
+    rush_injuries = injury_df[injury_df['IsRush'] == 1]
+    rush_pass_stats['rush'] = {
+        'count': len(rush_injuries),
+        'percentage': (len(rush_injuries) / len(injury_df)) * 100 if len(injury_df) > 0 else 0
+    }
+    
+    # Pass plays
+    pass_injuries = injury_df[injury_df['IsPass'] == 1]
+    rush_pass_stats['pass'] = {
+        'count': len(pass_injuries),
+        'percentage': (len(pass_injuries) / len(injury_df)) * 100 if len(injury_df) > 0 else 0
+    }
+    
+    # Calculate rates within rush/pass plays if total_df provided
+    if total_df is not None:
+        total_rush_plays = len(total_df[total_df['IsRush'] == 1])
+        if total_rush_plays > 0:
+            rush_pass_stats['rush']['rate'] = (len(rush_injuries) / total_rush_plays) * 100
+            rush_pass_stats['rush']['rate_per_1000_plays'] = (len(rush_injuries) / total_rush_plays) * 1000
+            
+        total_pass_plays = len(total_df[total_df['IsPass'] == 1])
+        if total_pass_plays > 0:
+            rush_pass_stats['pass']['rate'] = (len(pass_injuries) / total_pass_plays) * 100
+            rush_pass_stats['pass']['rate_per_1000_plays'] = (len(pass_injuries) / total_pass_plays) * 1000
+    
+    stats['by_rush_pass'] = rush_pass_stats
+    
+    # #### Play type analysis ####
+    if 'PlayType' in injury_df.columns:
+        play_type_stats = {}
+        for play_type in injury_df['PlayType'].dropna().unique():
+            play_type_injuries = injury_df[injury_df['PlayType'] == play_type]
+            play_type_stats[play_type] = {
+                'count': len(play_type_injuries),
+                'percentage': (len(play_type_injuries) / len(injury_df)) * 100 if len(injury_df) > 0 else 0
+            }
+            
+            # Calculate rate within play type if total_df provided
+            if total_df is not None and 'PlayType' in total_df.columns:
+                total_for_play_type = len(total_df[total_df['PlayType'] == play_type])
+                if total_for_play_type > 0:
+                    play_type_stats[play_type]['rate'] = (len(play_type_injuries) / total_for_play_type) * 100
+                    play_type_stats[play_type]['rate_per_1000_plays'] = (len(play_type_injuries) / total_for_play_type) * 1000
+        
+        stats['by_play_type'] = play_type_stats
+    
+    # #### Formation analysis ####
+    if 'Formation' in injury_df.columns:
+        formation_stats = {}
+        for formation in injury_df['Formation'].dropna().unique():
+            formation_injuries = injury_df[injury_df['Formation'] == formation]
+            formation_stats[formation] = {
+                'count': len(formation_injuries),
+                'percentage': (len(formation_injuries) / len(injury_df)) * 100 if len(injury_df) > 0 else 0
+            }
+            
+            # Calculate rate within formation if total_df provided
+            if total_df is not None and 'Formation' in total_df.columns:
+                total_for_formation = len(total_df[total_df['Formation'] == formation])
+                if total_for_formation > 0:
+                    formation_stats[formation]['rate'] = (len(formation_injuries) / total_for_formation) * 100
+                    formation_stats[formation]['rate_per_1000_plays'] = (len(formation_injuries) / total_for_formation) * 1000
+        
+        stats['by_formation'] = formation_stats
+    
+    # #### Rush direction analysis ####
+    if 'RushDirection' in injury_df.columns:
+        direction_stats = {}
+        for direction in injury_df['RushDirection'].dropna().unique():
+            direction_injuries = injury_df[(injury_df['IsRush'] == 1) & (injury_df['RushDirection'] == direction)]
+            direction_stats[direction] = {
+                'count': len(direction_injuries),
+                'percentage': (len(direction_injuries) / len(rush_injuries)) * 100 if len(rush_injuries) > 0 else 0
+            }
+            
+            # Calculate rate for rush direction if total_df provided
+            if total_df is not None and 'RushDirection' in total_df.columns:
+                total_for_direction = len(total_df[(total_df['IsRush'] == 1) & (total_df['RushDirection'] == direction)])
+                if total_for_direction > 0:
+                    direction_stats[direction]['rate'] = (len(direction_injuries) / total_for_direction) * 100
+                    direction_stats[direction]['rate_per_1000_plays'] = (len(direction_injuries) / total_for_direction) * 1000
+        
+        stats['by_rush_direction'] = direction_stats
+    
+    # #### Special play situations ####
+    special_plays = {
+        'touchdown': injury_df[injury_df['IsTouchdown'] == 1],
+        'sack': injury_df[injury_df['IsSack'] == 1],
+        'fumble': injury_df[injury_df['IsFumble'] == 1],
+        'interception': injury_df[injury_df['IsInterception'] == 1],
+        'penalty': injury_df[injury_df['IsPenalty'] == 1],
+        'incomplete_pass': injury_df[injury_df['IsIncomplete'] == 1]
+    }
+    
+    special_stats = {}
+    for play_name, play_df in special_plays.items():
+        special_stats[play_name] = {
+            'count': len(play_df),
+            'percentage': (len(play_df) / len(injury_df)) * 100 if len(injury_df) > 0 else 0
+        }
+        
+        # Calculate rate if total_df provided
+        if total_df is not None:
+            column_name = f"Is{play_name.title().replace('_', '')}"
+            if column_name in total_df.columns:
+                total_special_plays = len(total_df[total_df[column_name] == 1])
+                if total_special_plays > 0:
+                    special_stats[play_name]['rate'] = (len(play_df) / total_special_plays) * 100
+                    special_stats[play_name]['rate_per_1000_plays'] = (len(play_df) / total_special_plays) * 1000
+    
+    stats['by_special_play'] = special_stats
+    
+    # #### Team analysis ####
+    if all(col in injury_df.columns for col in ['OffenseTeam', 'DefenseTeam']):
+        # Offensive team injury rates
+        offense_stats = {}
+        for team in injury_df['OffenseTeam'].dropna().unique():
+            team_injuries = injury_df[injury_df['OffenseTeam'] == team]
+            offense_stats[team] = {
+                'count': len(team_injuries),
+                'percentage': (len(team_injuries) / len(injury_df)) * 100 if len(injury_df) > 0 else 0
+            }
+            
+            if total_df is not None:
+                total_team_plays = len(total_df[total_df['OffenseTeam'] == team])
+                if total_team_plays > 0:
+                    offense_stats[team]['rate'] = (len(team_injuries) / total_team_plays) * 100
+                    offense_stats[team]['rate_per_1000_plays'] = (len(team_injuries) / total_team_plays) * 1000
+        
+        stats['by_offense_team'] = offense_stats
+        
+        # Defensive team injury rates
+        defense_stats = {}
+        for team in injury_df['DefenseTeam'].dropna().unique():
+            team_injuries = injury_df[injury_df['DefenseTeam'] == team]
+            defense_stats[team] = {
+                'count': len(team_injuries),
+                'percentage': (len(team_injuries) / len(injury_df)) * 100 if len(injury_df) > 0 else 0
+            }
+            
+            if total_df is not None:
+                total_team_plays = len(total_df[total_df['DefenseTeam'] == team])
+                if total_team_plays > 0:
+                    defense_stats[team]['rate'] = (len(team_injuries) / total_team_plays) * 100
+                    defense_stats[team]['rate_per_1000_plays'] = (len(team_injuries) / total_team_plays) * 1000
+        
+        stats['by_defense_team'] = defense_stats
+    
+    # #### Season analysis ####
+    if 'SeasonYear' in injury_df.columns:
+        season_stats = {}
+        for season in sorted(injury_df['SeasonYear'].dropna().unique()):
+            season_injuries = injury_df[injury_df['SeasonYear'] == season]
+            season_stats[int(season)] = {
+                'count': len(season_injuries),
+                'percentage': (len(season_injuries) / len(injury_df)) * 100 if len(injury_df) > 0 else 0
+            }
+            
+            if total_df is not None and 'SeasonYear' in total_df.columns:
+                total_season_plays = len(total_df[total_df['SeasonYear'] == season])
+                if total_season_plays > 0:
+                    season_stats[int(season)]['rate'] = (len(season_injuries) / total_season_plays) * 100
+                    season_stats[int(season)]['rate_per_1000_plays'] = (len(season_injuries) / total_season_plays) * 1000
+        
+        stats['by_season'] = season_stats
+    
+    # #### Time trend analysis ####
+    if 'GameDate' in injury_df.columns:
+        # Ensure date is in datetime format
+        if not pd.api.types.is_datetime64_any_dtype(injury_df['GameDate']):
+            injury_df['GameDate'] = pd.to_datetime(injury_df['GameDate'])
+        
+        # Get min and max dates
+        stats['date_range'] = {
+            'first_date': injury_df['GameDate'].min().strftime('%Y-%m-%d'),
+            'last_date': injury_df['GameDate'].max().strftime('%Y-%m-%d')
+        }
+        
+        # Monthly trend
+        injury_df['YearMonth'] = injury_df['GameDate'].dt.strftime('%Y-%m')
+        monthly_stats = {}
+        
+        for year_month in sorted(injury_df['YearMonth'].unique()):
+            month_injuries = injury_df[injury_df['YearMonth'] == year_month]
+            monthly_stats[year_month] = {
+                'count': len(month_injuries),
+                'percentage': (len(month_injuries) / len(injury_df)) * 100 if len(injury_df) > 0 else 0
+            }
+            
+            if total_df is not None:
+                if not pd.api.types.is_datetime64_any_dtype(total_df['GameDate']):
+                    total_df['GameDate'] = pd.to_datetime(total_df['GameDate'])
+                
+                total_df['YearMonth'] = total_df['GameDate'].dt.strftime('%Y-%m')
+                total_month_plays = len(total_df[total_df['YearMonth'] == year_month])
+                
+                if total_month_plays > 0:
+                    monthly_stats[year_month]['rate'] = (len(month_injuries) / total_month_plays) * 100
+                    monthly_stats[year_month]['rate_per_1000_plays'] = (len(month_injuries) / total_month_plays) * 1000
+        
+        stats['by_month'] = monthly_stats
+    
+    return stats
 
 @q.worker
 def do_work(job_id):

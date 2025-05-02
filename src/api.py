@@ -61,7 +61,7 @@ def load_data_from_csv():
         df['play_id'] = range(1, len(df) + 1)  # Sequential play_id (1-based index)
 
         # Convert the DataFrame to a list of dictionaries
-        data = df[['play_id', 'GameId' 'GameDate','Formation', 'PlayType', 'Description', 'RushDirection', 'PassType']].to_dict(orient='records')
+        data = df[['play_id', "GameId", "GameDate", "Quarter", "Minute", "Second", "OffenseTeam", "DefenseTeam", "Down", "ToGo", "YardLine", "SeriesFirstDown", "NextScore", "Description", "TeamWin", "SeasonYear", "Yards", "Formation", "PlayType", "IsRush", "IsPass", "IsIncomplete", "IsTouchdown", "PassType", "IsSack", "IsChallenge", "IsChallengeReversed", "Challenger", "IsMeasurement", "IsInterception", "IsFumble", "IsPenalty", "IsTwoPointConversion", "IsTwoPointConversionSuccessful", "RushDirection", "YardLineFixed", "YardLineDirection", "IsPenaltyAccepted", "PenaltyTeam", "IsNoPlay", "PenaltyType", "PenaltyYards"]].to_dict(orient='records')
 
         # Store the data in Redis
         rd.set("hgnc_data", json.dumps(data))  # Store using a string key
@@ -318,6 +318,7 @@ def get_job(jobid: str):
         return jsonify({"error": "Internal server error"}), 500
 
 
+#TODO: Replace this
 @app.route('/results/<jobid>', methods=['GET'])
 def get_locus_types(jobid: str):
     """

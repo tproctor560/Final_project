@@ -6,3 +6,4 @@ logging
 pytest
 pandas
 re
+numpy
