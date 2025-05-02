@@ -162,7 +162,7 @@ def delete():
 
 
 @app.route('/plays', methods=['GET'])
-def load_plays
+def load_plays():
     """
     Loads data from CSV into Redis and returns the data immediately.
     """
