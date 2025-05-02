@@ -351,95 +351,104 @@ def get_job(jobid: str):
 
 
 @app.route('/results/<jobid>', methods=['GET'])
-def get_play_injury_rates(jobid: str):
+def get_injury_rates(jobid: str):
     """
-    Computes injury percentages for each unique (Formation + RushDirection) or (Formation + PassType)
-    combo, based on total usage rate of that combo in the dataset.
-
-    Returns 202 if job is still in progress, 404 if job not found, 500 for internal error.
+    Returns injury percentages per unique (Formation + RushDirection/PassType) for a given jobid.
+    If result is cached in DB 3, return it. If not, compute from play data in DB 0 and cache result in DB 3.
     """
-    logging.debug(f"Fetching injury rate results for job {jobid}")
+    logging.debug(f"Fetching analysis result for job {jobid}")
 
     try:
-        # Check job metadata
+        # Check if result is already cached in DB 3
+        result = results_db.get(jobid)
+        if result:
+            logging.info(f"Returning cached result for job {jobid}")
+            return jsonify(json.loads(result)), 200
+
+        # Load job metadata from DB 2
         job_data = jdb.hgetall(jobid)
         if not job_data:
             return jsonify({"error": "Job ID not found"}), 404
 
-        if job_data.get("status") != "complete":
-            return jsonify({
-                "message": f"Job {jobid} is not yet finished.",
-                "status": job_data.get("status")
-            }), 202
+        status = job_data.get("status", "unknown")
+        if status != "complete":
+            return jsonify({"message": f"Job {jobid} is not yet finished", "status": status}), 202
 
-        start_date = job_data.get("start_date")
-        end_date = job_data.get("end_date")
-        if not start_date or not end_date:
-            return jsonify({"error": "Job missing start or end date"}), 400
+        start_date_str = job_data.get("start_date")
+        end_date_str = job_data.get("end_date")
+        if not start_date_str or not end_date_str:
+            return jsonify({"error": "Missing date range in job metadata"}), 400
 
-        # Parse dates
         try:
-            start_dt = datetime.strptime(start_date, "%Y-%m-%d")
-            end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+            start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
+            end_date = datetime.strptime(end_date_str, "%Y-%m-%d")
         except ValueError:
-            return jsonify({"error": "Invalid date format"}), 400
+            return jsonify({"error": "Invalid date format in job metadata"}), 400
 
-        # Load data
+        # Load NFL play data from DB 0
         raw_data = rd.get("nfl_data")
         if not raw_data:
-            return jsonify({"error": "No NFL data available"}), 500
+            return jsonify({"error": "NFL data not found in Redis"}), 500
 
         plays = json.loads(raw_data)
 
-        # Track total plays and injury plays by combo
-        total_counts = {}
-        injury_counts = {}
+        # Usage and injury counters
+        rush_usage = {}
+        rush_injury = {}
+        pass_usage = {}
+        pass_injury = {}
 
         for play in plays:
             try:
                 play_date = datetime.strptime(play.get("GameDate", "1900-01-01"), "%Y-%m-%d")
+                if not (start_date <= play_date <= end_date):
+                    continue
+
+                play_type = play.get("PlayType", "").lower()
+                formation = play.get("Formation", "Unknown")
+                desc = play.get("Description", "").lower()
+
+                if play_type == "rush":
+                    direction = play.get("RushDirection", "Unknown")
+                    combo = f"{formation} - {direction}"
+                    rush_usage[combo] = rush_usage.get(combo, 0) + 1
+                    if "injured" in desc:
+                        rush_injury[combo] = rush_injury.get(combo, 0) + 1
+
+                elif play_type == "pass":
+                    pass_type = play.get("PassType", "Unknown")
+                    combo = f"{formation} - {pass_type}"
+                    pass_usage[combo] = pass_usage.get(combo, 0) + 1
+                    if "injured" in desc:
+                        pass_injury[combo] = pass_injury.get(combo, 0) + 1
+
             except Exception:
                 continue
 
-            if not (start_dt <= play_date <= end_dt):
-                continue
-
-            play_type = play.get("PlayType", "").lower()
-            formation = play.get("Formation", "Unknown")
-
-            if play_type == "rush":
-                key = f"{formation} - {play.get('RushDirection', 'Unknown')}"
-            elif play_type == "pass":
-                key = f"{formation} - {play.get('PassType', 'Unknown')}"
-            else:
-                continue
-
-            # Track total usage of each combo
-            total_counts[key] = total_counts.get(key, 0) + 1
-
-            # Track if this play had an injury
-            if "injured" in play.get("Description", "").lower():
-                injury_counts[key] = injury_counts.get(key, 0) + 1
-
-        # Compute injury percentages
-        injury_rates = {
-            key: (injury_counts.get(key, 0) / count) * 100
-            for key, count in total_counts.items()
+        rush_percentages = {
+            combo: (rush_injury.get(combo, 0) / count) * 100
+            for combo, count in rush_usage.items()
+        }
+        pass_percentages = {
+            combo: (pass_injury.get(combo, 0) / count) * 100
+            for combo, count in pass_usage.items()
         }
 
-        result = {
+        output = {
             "job_id": jobid,
-            "start_date": start_date,
-            "end_date": end_date,
-            "injury_rates_by_combo": injury_rates,
-            "total_combos_analyzed": len(injury_rates)
+            "start_date": start_date_str,
+            "end_date": end_date_str,
+            "rush_injury_rate_percent": rush_percentages,
+            "pass_injury_rate_percent": pass_percentages,
+            "note": "Rates are based on unique formation + direction/type combinations"
         }
 
-        results_db.set(jobid, json.dumps(result))
-        return jsonify(result), 200
+        results_db.set(jobid, json.dumps(output))
+        logging.info(f"Injury analysis complete for job {jobid}")
+        return jsonify(output), 200
 
     except Exception as e:
-        logging.error(f"Unexpected error in get_play_injury_rates({jobid}): {e}")
+        logging.error(f"Unexpected error in get_injury_rates({jobid}): {e}")
         return jsonify({"error": f"Unexpected error: {e}"}), 500
 
 if __name__ == "__main__":
