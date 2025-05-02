@@ -70,7 +70,7 @@ def load_and_return():
 
 
 
-@app.route('/plays/play_structure', methods=['GET' 'DELETE'])
+@app.route('/plays/play_structure', methods=['GET', 'DELETE'])
 def get_all_genes():
     """
     Retrieves the formation, playtype, and description for each play, 
