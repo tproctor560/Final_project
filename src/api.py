@@ -280,12 +280,6 @@ def create_job():
             data["start_date"] = oldest_date
             data["end_date"] = newest_date
 
-        if "method" not in data:
-            logging.warning("Job creation failed: missing method.")
-            return jsonify({
-                "error": "You must provide a method either plays/ or injuries/, refer to the documentation."
-            }), 400
-
         try:
             datetime.strptime(data["start_date"], "%Y-%m-%d")
             datetime.strptime(data["end_date"], "%Y-%m-%d")
@@ -298,14 +292,8 @@ def create_job():
                 "error": "Dates must be in YYYY-MM-DD format and within dataset range."
             }), 400
 
-        if not (data["method"].startswith("plays/") or data["method"].startswith("injury/")):
-            logging.warning("Job creation failed: invalid method.")
-            return jsonify({
-                "error": "Method must start with plays/ or injury/."
-            }), 400
-
-        job = add_job(data["start_date"], data["end_date"], data["method"])
-        logging.info(f"New job submitted: {job['id']} | Method: {data['method']} | Start: {data['start_date']} | End: {data['end_date']}")
+        job = add_job(data["start_date"], data["end_date"])
+        logging.info(f"New job submitted: {job['id']} | Start: {data['start_date']} | End: {data['end_date']}")
         return jsonify({"job_id": job['id'], "status": job["status"]}), 201
 
     except Exception as e:
