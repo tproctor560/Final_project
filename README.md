@@ -1,6 +1,6 @@
-# Homeowrk08: Against the Fall of Web Apps
+# Final Project: Injury analysis in NFL data
 
-## This Homework Assignment contains:   
+## This project contains:   
 
 - A Python directory `src` containing three Python files:
   - `api.py`
@@ -20,7 +20,7 @@
 ### One objective of this assignment is to use the ```src``` python directory to run the ensuing functions:    
 #### From `api.py`:   
 
-```def get_redis_client()```, ```def pull_data()```, ```def return_data()```, ```def delete()```, ```def get_all_genes()```, ```def gene_pull(hgnc_id: str)```, ```def create_job()```, def list_jobs(), ```def get_job(jobid: str)```, and ```def get_locus_types(jobid: str):```   
+```def get_redis_client()```, ```def helf()```, ```def pull_data()```, ```def get_data()```, ```def delete()```, ```def load_plays(hgnc_id: str)```, ```def get_play_structure()```, ```def pass_pull()```, ```def rush_pull()```, ```def create_job()```, ```def list_jobs()```, ```def get_job(jid)```, ```def get_injury_summary()```
 
 #### From `jobs.py`:
 
@@ -51,7 +51,9 @@
 #### Purpose:
 These functions are used to build our redis database, and then store, return, and later delete the data. We are to then run flask API routes to extract various data analysis regarding the gene data to provide the user with data for their given hgnc_id request. Finally, the api.py scripts are meant to call upon the jobs.py and worker.py scripts to create an asynchronous job queue system, where user submitted jobs are queued and then processed in the background by a worker, while being tracked through Redis.
 
-Additionally, the goal is for the functions: ```def pull_data()```, ```def return_data()```, ```def delete()```, ```def get_all_genes()```, ```def gene_pull(hgnc_id: str)```, ```def create_job()```, ```def list_jobs()```, and ```def get_job(jobid: str)```; to set up Flask API routes with ```@app.route``` to then call upon these funtcions using curl commands to run from the server for various endpoints, with the data in the redis database.   
+We chose to pursue a fully functional web app that supported an admin function as well. Therefore, there are routes that will run in real time, such as posting the data or deleting the data, in case an admin wants to change data. Then there are user friendly routes such as creating a job. These are run in succession asyncronously and do not have the same capacity as the admin functions.
+
+Additionally, the goal is for the functions: ```def pull_data()```, ```def return_data()```, ```def delete()```, ```def get_all_genes()```, ```def get_play_structure(play_id: str)```, ```def create_job()```, ```def list_jobs()```, and ```def get_job(jobid: str)```; to set up Flask API routes with ```@app.route``` to then call upon these functions using curl commands to run from the server for various endpoints, with the data in the redis database.  
 
 Finally we run integration and unit tests using the `test` directory to ensure the smooth programming processes are working as expected.
 ## Routes
@@ -63,9 +65,9 @@ The following route endpoints correlate to the following functions:
 
 ```@app.route('data', methods=['DELETE'])``` is used to run ```def delete()```
 
-```@app.route('/genes', methods=['GET'])``` is used to run  ```def get_all_genes()```   
+```@app.route('/plays', methods=['GET'])``` is used to run  ```def load_plays()```   
 
-```@app.route('/genes/<hgnc_id>', methods=['GET'])``` is used to run ```def gene_pull(hgnc_id: str)```   
+```@app.route('/plays/<play_id>', methods=['GET'])``` is used to run ```def get_play_structure(hgnc_id: str)```   
 
 ```@app.route('/jobs', methods=['POST'])``` is used to run ```def create_job()```   
 
@@ -73,7 +75,7 @@ The following route endpoints correlate to the following functions:
 
 ```@app.route('/jobs/<jobid>', methods=['GET'])``` is used to run ```def get_job(jobid: str)```   
 
-```@app.route('/results/<jobid>', methods=['GET'])``` is used to run ```def get_locus_types(jobid: str)```   
+```@app.route('/results/<jobid>', methods=['GET'])``` is used to run ```def get_injury_summary(jobid: str)```   
 
 
 #### Additionally, in Worker.py
@@ -84,15 +86,15 @@ The HotQueue ```@q.worker``` decorator is used to watch the queue and pull off J
 ## Data
 The data this projet is analyzing is the complete list of every named gene. The Human Genome Organization has named every genome with a meaningul name. This dataset includes all of those genomes, where they are, what ehy're named, symbols for the genome,  various Id's and other descriptors. Used here in json format this data is comprehensive and crucial to understanding human genomes. Having this public database is crucial, and these functions help users to identify and search for individual genomes.
 
-The data can be accessed through the HGNC archive at the following link:(https://www.genenames.org/download/archive/)
+The data can be accessed through the HGNC archive at the following link:(https://nflsavant.com/about.php) [https://nflsavant.com/about.php]
 
-Where the user can then download the specific json data used in this project here:(https://storage.googleapis.com/public-download-files/hgnc/json/json/hgnc_complete_set.json)
+Where the user can then download the specific csv data from that website. 
 
 It is then built into the redis database using the ```def pull_data()``` and ```def get_redis_client()``` functions with the downloaded URL being set above:    
 ```rd = get_redis_client()   
 
 rd = get_redis_client()   
-HGNC_URL = "https://storage.googleapis.com/public-download-files/hgnc/json/json/hgnc_complete_set.json"
+<!-- HGNC_URL = "https://storage.googleapis.com/public-download-files/hgnc/json/json/hgnc_complete_set.json" -->
 ```   
  
 The ```pull_data()``` function fetches the dataset and stores it in Redis for access by all route
@@ -136,16 +138,16 @@ the user will take the previous filter job command by start and end dates in whi
 The output will be the analysis of the downloaded data from our functions.   
 
 This will include:   
-- ```curl -X POST "http://127.0.0.1:5000/data"``` - this will output a message on if the data was stored correctly   
+- ```curl -X POST "http://127.0.0.1:5000/plays"``` - this will output a message on if the data was stored correctly   
 
     example code output:  
     ```json
     {
-      "message": "HGNC data loaded successfully"
+      "message": "NFL data loaded successfully"
     }
     ```
 
-- ```curl -X GET "http://127.0.0.1:5000/data"``` - this will ouput the entire dataset that has been stored in redis
+- ```curl -X GET "http://127.0.0.1:5000/plays"``` - this will ouput the entire dataset that has been stored in redis
 
     example code snippet output:  
     ```json
@@ -161,7 +163,7 @@ This will include:
     }
     ```
 
-- ```curl -X DELETE "http://127.0.0.1:5000/data"``` - this will output nothing, and the redis database will be cleared of data by deleting it   
+- ```curl -X DELETE "http://127.0.0.1:5000/plays"``` - this will output nothing, and the redis database will be cleared of data by deleting it   
 
 - ```curl -X GET "http://127.0.0.1:5000/genes"``` - this will output all the HGNC gene id's within the dataset
 
@@ -190,7 +192,7 @@ This will include:
     }
     ```
 
-- ```curl -X POST http://127.0.0.1:5000/jobs \ -H "Content-Type: application/json" \ -d '{"start_date": "2010-02-10", "end_date": "2015-03-20"}'``` - this will create a job submission request within a given list of specified gene approval dates that the user submits.
+- ```curl -X POST http://127.0.0.1:5000/jobs \ -H "Content-Type: application/json" \ -d '{"start_date": "2024-06-23", "end_date": "2025-01-10"}'``` - this will create a job submission request within a given list of specified gene approval dates that the user submits. It is important to know that if the jobs request is missing data, it will default to the range of the dataset. Therefore the following is a correct request as well ```curl -X POST http://127.0.0.1:5000/jobs \ -H "Content-Type: application/json" \ -d '{}'``` - This functionality is different than what we have studies in class, but it makes sense for a dataset like this.
  
     example code output:  
     ```json
@@ -200,7 +202,7 @@ This will include:
     }
     ```
 
-- ```curl -X GET "http://127.0.0.1:5000/jobs" \ -H "Content-Type: application/json" \ -d '{"start_date": "2010-02-10", "end_date": "2015-03-20"}'``` - this will return all the current jobs that have been submitted by the user.
+- ```curl -X GET "http://127.0.0.1:5000/jobs"``` - this will return all the current jobs that have been submitted by the user.
   
     example code output:  
     ```json
@@ -216,9 +218,9 @@ This will include:
     example code output:  
     ```json
     {
-      "end": "2015-03-20",
+      "end": "2025-01-20",
       "id": "82916f6d-af42-42b5-bd18-07fc762fc48f",
-      "start": "2010-02-10",
+      "start": "2024-06-10",
       "status": "complete"
     }
     ```
