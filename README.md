@@ -117,12 +117,29 @@ The line ```app = Flask(__name__)``` allows the file to turn into a Flask API se
 /data can be replaced with any of the endpoints given below depending on the desired function   
 
 ## Running with Kubernetes containers locally
-To run this project with Kubernetes containers locally, you should first cd into the kubernetes directory and then run 
-    ⁃    ```make test-k8s-up``` to deploy the test resources.
-    ⁃    ```make test-k8s-status``` to check the status.
-    ⁃    ```make test-k8s-down``` to delete the resources.
-Then to test whether the app is running, try ```curl -X GET "http://127.0.0.1:5000/help"``.
-When debugging it is important to restart the kubernetes to ensure functionality this can be done running: ```kubectl rollout restart deployment <POD Name> -n <Docker Name>
+To run this project using Kubernetes containers locally:
+
+```bash
+cd kubernetes
+make test-k8s-up
+make test-k8s-status
+make test-k8s-down
+```
+
+### Testing the Application
+
+After deployment, verify the app is running by sending a GET request to the `/help` endpoint:
+
+```bash
+curl -X GET "http://127.0.0.1:5000/help"
+```
+
+### Debugging Tips
+
+If you're encountering issues, restart the Kubernetes deployment to ensure proper functionality:
+
+```bash
+kubectl rollout restart deployment <POD_NAME> -n <NAMESPACE>
 
 ### Parameters
 
