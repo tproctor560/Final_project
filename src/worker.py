@@ -104,5 +104,5 @@ def do_work(job_id):
     run_worker_job_logic(job_id)
 
 if __name__ == "__main__":
-    q.run()
+    do_work()  # This listens to the queue
 
