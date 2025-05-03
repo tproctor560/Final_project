@@ -104,5 +104,5 @@ def do_work(job_id):
     run_worker_job_logic(job_id)
 
 if __name__ == "__main__":
-    while True:
-        time.sleep(1)
+    q.run()
+
