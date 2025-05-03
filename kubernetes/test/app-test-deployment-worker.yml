@@ -20,6 +20,6 @@ spec:
           command: ["python", "worker.py"]  # 👈 this overrides CMD
           env:
             - name: REDIS_HOST
-              value: redis
+              value: redis-db
             - name: REDIS_PORT
               value: "6379"
