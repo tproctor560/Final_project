@@ -5,21 +5,23 @@ import os
 import logging
 from hotqueue import HotQueue
 from datetime import datetime
+from dateutil import parser
 from jobs import get_job_by_id, update_job_status
 
-# Setup
+# Setup logging
 log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=getattr(logging, log_level))
 
+# Environment configuration
 _redis_ip = os.environ.get('REDIS_HOST', 'redis-db')
 _redis_port = int(os.environ.get('REDIS_PORT', 6379))
 
 # Redis connections
 try:
-    rd = redis.Redis(host=_redis_ip, port=_redis_port, db=0)
-    q = HotQueue("queue", host=_redis_ip, port=_redis_port, db=1)
-    jdb = redis.Redis(host=_redis_ip, port=_redis_port, db=2)
-    results_db = redis.Redis(host=_redis_ip, port=_redis_port, db=3, decode_responses=True)
+    rd = redis.Redis(host=_redis_ip, port=_redis_port, db=0)  # Raw data
+    q = HotQueue("queue", host=_redis_ip, port=_redis_port, db=1)  # Job queue
+    jdb = redis.Redis(host=_redis_ip, port=_redis_port, db=2)  # Job metadata
+    results_db = redis.Redis(host=_redis_ip, port=_redis_port, db=3, decode_responses=True)  # Results DB
     logging.info("Worker connected to Redis databases.")
 except Exception as e:
     logging.error(f"Failed to connect to Redis: {e}")
@@ -49,7 +51,9 @@ def run_worker_job_logic(job_id: str) -> None:
 
         for play in play_list:
             try:
-                play_date = datetime.strptime(play.get("GameDate", "1900-01-01"), "%Y-%m-%d")
+                game_date_str = play.get("GameDate", "1900-01-01")
+                play_date = parser.parse(game_date_str)
+
                 if not (start_date <= play_date <= end_date):
                     continue
 
@@ -105,4 +109,3 @@ def do_work(job_id):
 
 if __name__ == "__main__":
     do_work()  # This listens to the queue
-
