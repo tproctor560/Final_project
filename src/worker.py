@@ -106,4 +106,4 @@ def do_work(job_id):
 
 if __name__ == "__main__":
     logging.info("Worker is listening for jobs...")
-    do_work()
+    q.run()
