@@ -1,24 +1,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: flask-app
+  name: worker
   labels:
-    app: flask-app
+    app: worker
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
-      app: flask-app
+      app: worker
   template:
     metadata:
       labels:
-        app: flask-app
+        app: worker
     spec:
       containers:
-        - name: flask-app
+        - name: worker
           image: broccolisoup/flask_final:latest
-          ports:
-            - containerPort: 5000
+          command: ["python"]
+          args: ["src/worker.py"]
           env:
             - name: REDIS_HOST
               value: redis
