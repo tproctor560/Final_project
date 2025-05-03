@@ -119,27 +119,29 @@ The line ```app = Flask(__name__)``` allows the file to turn into a Flask API se
 ## Running with Kubernetes containers locally
 To run this project using Kubernetes containers locally:
 
-```bash
-cd kubernetes
-make test-k8s-up
-make test-k8s-status
-make test-k8s-down
-```
+
+- ```cd kubernetes```   
+- ```make test-k8s-up```   
+- ```make test-k8s-status```   
+- ```make test-k8s-down```  
+
 
 ### Testing the Application
 
 After deployment, verify the app is running by sending a GET request to the `/help` endpoint:
 
-```bash
-curl -X GET "http://127.0.0.1:5000/help"
-```
+
+```curl -X GET "http://127.0.0.1:5000/help"```   
+
+
 
 ### Debugging Tips
 
 If you're encountering issues, restart the Kubernetes deployment to ensure proper functionality:
 
-```bash
-kubectl rollout restart deployment <POD_NAME> -n <NAMESPACE>
+
+```kubectl rollout restart deployment <POD_NAME> -n <NAMESPACE>```   
+
 
 ### Parameters
 
