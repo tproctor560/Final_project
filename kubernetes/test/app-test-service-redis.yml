@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: redis-db
-  namespace: vbetala6276
+  namespace: tproctor560
 spec:
   selector:
     app: redis
