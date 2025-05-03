@@ -18,7 +18,10 @@ def get_redis_client() -> redis.Redis:
     """
     Returns a redis client connected to the redis server.
     """
-    return redis.Redis(host="redis-db", port=6379, decode_responses=True)
+    redis_host = os.environ.get("REDIS_HOST", "redis-db")  # default to "redis-db" if not set
+    redis_port = int(os.environ.get("REDIS_PORT", "6379"))
+    return redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
+
 
 rd = get_redis_client()
 CSV_FILE_PATH = '/code/data/pbp-2024.csv'
