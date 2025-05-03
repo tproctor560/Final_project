@@ -43,7 +43,7 @@ def run_worker_job_logic(job_id: str) -> None:
 
         for play in play_list:
             try:
-                play_date = datetime.strptime(play.get("GameDate", "1900-01-01"), "%m/%d/%y")
+                play_date = datetime.strptime(play.get("GameDate", "1900-01-01"), "%Y-%m-%d")
                 if not (start_date <= play_date <= end_date):
                     continue
 
