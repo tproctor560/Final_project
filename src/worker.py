@@ -101,9 +101,8 @@ def run_worker_job_logic(job_id: str) -> None:
 
 @q.worker
 def do_work(job_id):
-    logging.info(f"Dequeued job from HotQueue: {job_id}")
     run_worker_job_logic(job_id)
 
 if __name__ == "__main__":
-    logging.info("Worker is listening for jobs...")
-    q.run()
+    while True:
+        time.sleep(1)
