@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: flask-app
-          image: broccolisoup/final_flask_app:latest
+          image: broccolisoup/flask_final:latest
           ports:
             - containerPort: 5000
           env:

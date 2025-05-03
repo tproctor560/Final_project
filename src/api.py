@@ -42,7 +42,7 @@ def help():
         }
     }), 200
 
-@app.route('/data', methods = ['POST'])
+@app.route('/data', methods=['POST'])
 def pull_data():
     """
     Loads NFL play-by-play data from a CSV file and stores it in Redis.
@@ -98,7 +98,7 @@ def pull_data():
         logging.error(f"Error loading data from CSV: {str(e)}")
         return jsonify({"error": f"Error loading data from CSV: {str(e)}"}), 500
         
-@app.route('/data', methods = ['GET'])
+@app.route('/data', methods=['GET'])
 def return_data():
     """
     Returns the cached NFL play-by-play data from Redis.
