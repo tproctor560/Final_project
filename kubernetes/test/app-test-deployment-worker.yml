@@ -17,8 +17,7 @@ spec:
       containers:
         - name: worker
           image: broccolisoup/flask_final:latest
-          command: ["python"]
-          args: ["src/worker.py"]
+          command: ["python", "worker.py"]  # 👈 this overrides CMD
           env:
             - name: REDIS_HOST
               value: redis
